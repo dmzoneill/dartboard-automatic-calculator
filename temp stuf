@@ -1,0 +1,376 @@
+    
+    	int imageWidth = 0, imageHeight = 0, i, j;
+	int entireColourAsIntegerChange;
+	Color newColour,oldColourCurrent;
+    
+    	Point2D.Double darts[] = new Point2D.Double[3];	
+	Point2D.Double dartsCorners[] = new Point2D.Double[3];	
+	int dartcount = 0;
+	int score = 0;
+	int total = 0;
+	int throwTotal = 0;
+	
+	File imageCurrentFile,imageCalibratedFile;
+		String imageCurrentLocation,imagecalibratedLocation;
+	File imageCurrentFile,imageDifferenceFile,imageCalibratedFile;
+	String imageCurrentLocation,imageDifferenceLocation;
+	BufferedImage calibratedImage, currentImage;	
+	
+	imageDifferenceLocation = "difference.bmp";	
+	imageCurrentLocation = "current.bmp";
+	    imageDifferenceFile = new File(imageDifferenceLocation);      
+    
+    currentImage = ImageIO.read(imageCurrentFile);   
+    imageCurrentFile = new File(imageCurrentLocation);
+    
+    imageWidth = calibratedImage.getWidth();
+    imageHeight = calibratedImage.getHeight();
+
+    for (i = 0; i < imageHeight; i++) 
+    {
+    	if(dartcount==3)
+    		break;
+    	
+	   for (j = 0; j < imageWidth; j++) 
+	   {
+		   if(dartcount==3)
+	    		break;
+
+		  entireColourAsIntegerChange = currentImage.getRGB(j, i);
+
+		  oldColourCurrent = new Color(entireColourAsIntegerChange);
+		  
+		  int red = oldColourCurrent.getRed();
+		  int green = oldColourCurrent.getGreen();
+		  int blue = oldColourCurrent.getBlue();
+
+			  
+		  if((blue>210) && (green<50) && (red>210))
+		  {
+			  
+			  if(dartcount<2)
+			  {
+				  dartsCorners[dartcount] = new Point2D.Double(0,0);	
+				  dartsCorners[dartcount + 1] = new Point2D.Double(0,0);
+			  }
+			  if((j >= (dartsCorners[0].x -3) && j <= (dartsCorners[0].x +3)) && (i >= (dartsCorners[0].y -3) && i <= (dartsCorners[0].y +3)))
+			  {
+				 continue;				  
+			  }
+			  if((j >= (dartsCorners[1].x -3) && j <= (dartsCorners[1].x +3)) && (i >= (dartsCorners[1].y -3) && i <= (dartsCorners[1].y +3)))
+			  {
+				 continue;				  
+			  }
+			  
+			  if(dartcount<3)
+			  {				  				  
+				  dartsCorners[dartcount] = new Point2D.Double((j),(i));
+				  darts[dartcount] = new Point2D.Double((j + 2.0),(i + 2.0));
+				  int x = (int) darts[dartcount].x;
+				  int y = (int) darts[dartcount].y;
+				  double angle = 0.0;
+				  
+				  angle = Math.atan((475-darts[dartcount].y)/(644-darts[dartcount].x));
+				  
+				  if(x<644 && y<475)
+				  {
+					  // top left
+					  angle = angle + 0;
+					  					  
+				  }
+				  else if(x>644 && y<475)
+				  {
+					  // top right
+					  angle = angle + Math.PI;				  
+				  }
+				  else if(x>644 && y>475)
+				  {
+					  	// bottom right
+					  angle = angle + Math.PI;
+					  
+				  }
+				  else if(x<644 && y>475)
+				  {
+					  // bottom left
+					  angle = angle + (4*(Math.PI / 2));	  
+				  }
+				  
+				  double xLen = (double)(644 - darts[dartcount].x);
+				  double yLen = (double)(475 - darts[dartcount].y);
+				  double xyS = (double) (xLen * xLen) + (yLen * yLen);
+				  double distanceFromBull = Math.sqrt(xyS);	
+				  int degrees = (int)(angle * 57.2957795);
+
+		  
+				  if(degrees>=0 && degrees<9)
+					  score = 11;
+				  
+				  if(degrees>9 && degrees<27)
+				 	  score = 14;
+				 
+				  if(degrees>27 && degrees<45)
+				      score = 9;
+				  
+				  if(degrees>45 && degrees<63)
+				  	  score = 12;
+				  
+				  if(degrees>63 && degrees<81)
+				  	  score = 5;
+				  
+				  if(degrees>81 && degrees<99)
+				  	  score = 20;
+				  
+				  if(degrees>99 && degrees<117)
+				  	  score = 1;
+				  
+				  if(degrees>117 && degrees<135)
+				  	  score = 18;
+				  
+				  if(degrees>135 && degrees<153)
+				  	  score = 4;
+				  
+				  if(degrees>153 && degrees<171)
+				  	  score = 13;
+				  
+				  if(degrees>171 && degrees<189)
+				  	  score = 6;
+				  				  
+				  if(degrees>189 && degrees<207)
+				  	  score = 10;
+				  
+				  if(degrees>207 && degrees<225)
+				  	  score = 15;
+				  
+				  if(degrees>225 && degrees<243)
+				  	  score = 2;
+				  
+				  if(degrees>243 && degrees<261)
+				  	  score = 17;
+				  
+				  if(degrees>261 && degrees<279)
+				  	  score = 3;
+				  
+				  if(degrees>279 && degrees<297)
+				  	  score = 19;
+				  
+				  if(degrees>297 && degrees<315)
+				  	  score = 7;
+				  
+				  if(degrees>315 && degrees<333)
+				  	  score = 16;
+				  
+				  if(degrees>333 && degrees<351)
+				  	  score = 8;
+				  
+				  if(degrees>351 && degrees<360)
+				  	  score = 11;
+			  
+				  
+				  
+				  
+				  
+				  
+				  if(distanceFromBull<258)
+				  {			
+					  String bonus = new String();
+					  
+					  if(distanceFromBull<258 && distanceFromBull>238)
+					  {
+						  // double	
+						  bonus = "Double : " + score;
+						  total = score * 2;
+					  }
+					  else if(distanceFromBull<160 && distanceFromBull>146)
+					  {
+						  // triple			
+						  bonus = "Triple : " + score;
+						  total = score * 3;
+					  }
+					  else if(distanceFromBull<24 && distanceFromBull>10)
+					  {
+						  // outer bull	
+						  bonus = "Outer Bull : 25";
+						  total = 25;
+					  }
+					  else if(distanceFromBull<10)
+					  {
+						  // bull	
+						  bonus = "Bull : 50";
+						  total = 50;
+					  }
+					  else
+					  {
+						  // single
+						  bonus = "Single : " + score;
+						  total = score;
+					  }
+					  
+					  System.out.println("Dart No. : "+ (dartcount + 1));					  
+					  System.out.println("Dart hit board at coordinate : [" + (int)darts[dartcount].x + "," + (int)darts[dartcount].y + "]");
+					  System.out.println("From bull radians : " + angle );
+					  System.out.println("From bull degrees : " + degrees);
+					  System.out.println("From bull distance : " + (int) distanceFromBull);
+					  System.out.println("Position : "+bonus);
+					  System.out.println("Scored : " + total);
+					  throwTotal = throwTotal + total;
+					  System.out.println("");
+					  
+				
+					 	
+				  }
+				  else
+				  {			  			  
+					  System.out.println("Dart No. "+ (dartcount + 1));					  
+					  System.out.println("Dart hit board at coordinate : [" + (int)darts[dartcount].x + "," + (int)darts[dartcount].y + "]");
+					  System.out.println("From bull radians : " + angle );
+					  System.out.println("From bull degrees : " + degrees);
+					  System.out.println("From bull distance : " + (int) distanceFromBull);
+					  System.out.println("Scored : " + 0 + ", Yo didn't hit a scoring region");
+				  }
+				  dartcount++;
+				  
+			  }
+			  			  
+			  newColour = new Color(0, 0, 255);		 
+			  calibratedImage.setRGB(j, i, newColour.getRGB());	
+		  }
+		  				
+       }
+	}   
+	
+	System.out.println("Throw Total : " + throwTotal);
+	ImageIO.write(calibratedImage, "bmp", imageDifferenceFile);
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	double x = (this.center.x - this.bullradius - 3);
+	    double y = (this.center.y - this.bullradius - 1);
+	    double w = (this.bullradius * 2) + 5;
+	    double h = (this.bullradius * 2) + 5;
+	    double diameter = this.boardradius * 2;
+	    double radius = this.boardradius;
+
+	    
+	    g2.setPaint(Color.YELLOW);
+	    g2.setStroke(new BasicStroke(2));
+	    
+	    Ellipse2D e = new Ellipse2D.Double(x, y, w, h);	 	    	    
+	    e.setFrame(x, y, w, h);
+	    g2.draw(e);	 
+	    
+	    Ellipse2D f = new Ellipse2D.Double(diameter, diameter, x - radius, y - radius);	
+	    f.setFrame(x - radius + 8, y - radius + 13, diameter+2, diameter);
+	    g2.draw(f);
+	    
+	    Ellipse2D g = new Ellipse2D.Double(this.doubleradius * 2, this.doubleradius * 2, this.doubleradius, this.doubleradius);	 	    	    
+	    g.setFrame(x - this.doubleradius + 8, y - this.doubleradius + 13, this.doubleradius * 2, this.doubleradius * 2);
+	    g2.draw(g);	  	    
+	    
+	    Ellipse2D i = new Ellipse2D.Double(this.outertripleradius * 2, this.outertripleradius * 2, this.outertripleradius, this.outertripleradius);	 	    	    
+	    i.setFrame(x - this.outertripleradius + 8, y - this.outertripleradius + 11, this.outertripleradius * 2 +6, this.outertripleradius * 2);
+	    g2.draw(i);	    
+	    
+	    Ellipse2D j = new Ellipse2D.Double(this.innertripleradius * 2, this.innertripleradius * 2, this.innertripleradius, this.innertripleradius);	 	    	    
+	    j.setFrame(x - this.innertripleradius + 10, y - this.innertripleradius + 13, this.innertripleradius * 2, this.innertripleradius * 2 -4);
+	    g2.draw(j);	  	    
+	    
+	    Ellipse2D k = new Ellipse2D.Double(this.outerbullouterradius * 2, this.outerbullouterradius * 2, this.outerbullouterradius, this.outerbullouterradius);	 	    	    
+	    k.setFrame(x - this.outerbullouterradius + 10, y - this.outerbullouterradius + 10, this.outerbullouterradius * 2 +2, this.outerbullouterradius * 2);
+	    g2.draw(k);	    
+	    
+	    Ellipse2D l = new Ellipse2D.Double(this.outerbullinnerradius * 2, this.outerbullinnerradius * 2, this.outerbullinnerradius, this.outerbullinnerradius);	 	    	    
+	    l.setFrame(x - this.outerbullinnerradius + 10, y -this.outerbullinnerradius + 10, this.outerbullinnerradius * 2 +2, this.outerbullinnerradius * 2);
+	    g2.draw(l);		    
+	    
+	    int angle = 45;
+	    
+	    
+	    for(int t = 0; t < 20; t++)
+	    {
+	    	int polarOuterX = (int) ((center.x -189) * Math.cos(angle));
+	    	int polarOuterY = (int) ((center.y -191) * Math.cos(angle));
+	    	System.out.println(" Polar outer Angle : " + angle + " (" + polarOuterX +"," + polarOuterY +")");
+	    	
+	    	int polarInnerX = (int) ((center.x -17) * Math.cos(angle));
+	    	int polarInnerY = (int) ((center.x -17) * Math.cos(angle));
+	    	System.out.println(" Polar inner Angle : " + angle + " (" + polarInnerX +"," + polarInnerY +")");
+	    	
+	    	//g2.drawLine(polarInnerX, polarInnerY, polarOuterX, polarOuterY);
+	    	
+	    	angle = angle + 18;
+	    }
+	    
+	    
+	    
+	    
+	    
+	    
+	    
+	    
+	    //	  create the detector 
+	    CannyEdgeDetector detector = new CannyEdgeDetector(); //adjust its parameters as desired 
+	    detector.setLowThreshold(0.1f); 
+	    detector.setHighThreshold(8f); //apply it to an image 
+	    detector.setSourceImage(this.fractal); 
+	    detector.process(); 
+	    BufferedImage edges = detector.getEdgesImage();
+	    
+	    
+	    GraphicsEnvironment environment =  GraphicsEnvironment.getLocalGraphicsEnvironment();	    
+	    GraphicsDevice device =  environment.getDefaultScreenDevice();	      
+	    GraphicsConfiguration config = device.getDefaultConfiguration();
+	    BufferedImage tes = config.createCompatibleImage(edges.getWidth(),edges.getHeight(), Transparency.BITMASK);
+	    tes = edges;
+	    
+	    int matrix[][] = new int[edges.getWidth()][edges.getHeight()];
+	    
+	    for (int m = 0; m < edges.getWidth(); m++) 
+		{    	
+	  		for (int c = 0; c < edges.getHeight(); c++) 
+	  		 {
+	  			 Color color = new Color(tes.getRGB(m, c));	
+	  			 if(color.getGreen()<30 && color.getBlue()<30 && color.getRed() < 30)
+	  			 {
+	  				 tes.setRGB(m, c, Transparency.TRANSLUCENT);
+	  			 }
+	  			 else
+	  			 {
+	  				matrix[m][c] = 1;
+	  				tes.setRGB(m, c, Color.YELLOW.getRGB());	  				 
+	  			 }
+	  		 }
+		}	
+	    
+	    for (int m = 0; m < edges.getWidth(); m++) 
+		{    	
+	    	System.out.print("\n");
+	  		for (int c = 0; c < edges.getHeight(); c++) 
+	  		{
+	  			System.out.print(matrix[m][c]);
+	  		}
+		}	
+		
+		//graphics.drawImage(tes, 0, 0, null);
