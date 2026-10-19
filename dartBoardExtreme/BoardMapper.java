@@ -46,6 +46,27 @@ public class BoardMapper
 		try 
 		{			
 			this.dartboardImage = ImageIO.read(this.dartboardFile);
+		}
+		catch(Exception e)
+		{
+			System.out.println("Error buffering image file");
+			return;
+		}
+		initFromImage();
+	}
+	
+	
+	public BoardMapper(BufferedImage board) 
+	{
+		// TODO Auto-generated constructor stub
+		this.dartboardImage = board;
+		initFromImage();
+	}
+
+	private void initFromImage()
+	{
+		try
+		{
 			this.dataBuffer = this.dartboardImage.getRaster().getDataBuffer();
 			this.dartboardHeight = this.dartboardImage.getHeight();
 			this.dartboardWidth = this.dartboardImage.getWidth();
@@ -58,25 +79,59 @@ public class BoardMapper
 			System.out.println("Error buffering image file");
 		}
 	}
-	
-	
-	public BoardMapper(BufferedImage board) 
+
+	private static boolean isRedBull(Color color)
 	{
-		// TODO Auto-generated constructor stub
-		this.dartboardImage = board;
-		try 
-		{			
-			this.dataBuffer = this.dartboardImage.getRaster().getDataBuffer();
-			this.dartboardHeight = this.dartboardImage.getHeight();
-			this.dartboardWidth = this.dartboardImage.getWidth();
-			this.dartboardMapColors = new Color[this.dartboardWidth][this.dartboardHeight];
-			this.dartboardMapRegions = new int[this.dartboardWidth][this.dartboardHeight];
-			this.raster = this.dartboardImage.getData();
-		}
-		catch(Exception e)
+		return color.getRed() > 120 && color.getGreen() < 80 && color.getBlue() < 60;
+	}
+
+	private static boolean isGreenRing(Color color)
+	{
+		return color.getRed() < 140 && color.getGreen() > 120 && color.getBlue() < 80;
+	}
+
+	// Last inner-axis red-bull hit on the first outer index that has one, else (0, 0).
+	// Ascending flags match the original for-loop directions, including empty ranges.
+	private Point2D.Double scanRedBull(int outerStart, int outerEnd, boolean outerAscending, int innerStart, int innerEnd, boolean innerAscending, boolean outerIsX)
+	{
+		int outerStep = outerAscending ? 1 : -1;
+		int innerStep = innerAscending ? 1 : -1;
+		Point2D.Double found = null;
+		for (int outer = outerStart; outerAscending ? outer < outerEnd : outer > outerEnd; outer += outerStep)
 		{
-			System.out.println("Error buffering image file");
+			if (found != null)
+			{
+				break;
+			}
+			for (int inner = innerStart; innerAscending ? inner < innerEnd : inner > innerEnd; inner += innerStep)
+			{
+				int x = outerIsX ? outer : inner;
+				int y = outerIsX ? inner : outer;
+				if (isRedBull(this.dartboardMapColors[x][y]))
+				{
+					found = new Point2D.Double(x, y);
+				}
+			}
 		}
+		if (found == null)
+		{
+			return new Point2D.Double(0, 0);
+		}
+		return found;
+	}
+
+	// First green-ring x on the row. end is exclusive. 0 if none.
+	private int scanGreenRing(int start, int end, int y, boolean ascending)
+	{
+		int step = ascending ? 1 : -1;
+		for (int i = start; ascending ? i < end : i > end; i += step)
+		{
+			if (isGreenRing(this.dartboardMapColors[i][y]))
+			{
+				return i;
+			}
+		}
+		return 0;
 	}
 	
 	
@@ -107,7 +162,7 @@ public class BoardMapper
 		   {
 			   Color color = this.dartboardMapColors[i][j];
 			   // if black red or green
-			   if(color.getRed()<140 && color.getGreen()>120 && color.getBlue()<80)
+			   if(isGreenRing(color))
 			   {
 				   if(leftMost==false)
 				   {
@@ -130,94 +185,12 @@ public class BoardMapper
 		System.out.println("Left - > right " + (middle - bullAspectRatio) + " to " + (middle + bullAspectRatio));
 		System.out.println("Top - > bottom " + (ylevel - bullAspectRatio) + " to " + (ylevel + bullAspectRatio));
 		
-		// bull left		
-		Point2D.Double bullLeftPoint = new Point2D.Double(0,0);
-		boolean bullLeftPointBool = false;
-		
-		for (i = (middle - bullAspectRatio); i < (middle + bullAspectRatio); i++) 
-	    {    	
-			if(bullLeftPointBool==true)
-			{
-				break;				
-			}
-			for (j = (ylevel - bullAspectRatio); j < (ylevel + bullAspectRatio); j++) 
-			{
-				Color color = this.dartboardMapColors[i][j];
-				// if black red or green
-				if(color.getRed()>120 && color.getGreen()<80 && color.getBlue()<60)
-				{
-					bullLeftPoint = new Point2D.Double(i,j);
-					bullLeftPointBool = true;
-				}
-			}	
-	    }
-		
-		// bull right
-		Point2D.Double bullRightPoint = new Point2D.Double(0,0);
-		boolean bullRightPointBool = false;
-		
-		for (i = (middle + bullAspectRatio); i > (middle - bullAspectRatio); i--) 
-	    {    	
-			if(bullRightPointBool==true)
-			{
-				break;				
-			}
-			for (j = (ylevel - bullAspectRatio); j < (ylevel + bullAspectRatio); j++) 
-			{
-				Color color = this.dartboardMapColors[i][j];
-				// if black red or green
-				if(color.getRed()>120 && color.getGreen()<80 && color.getBlue()<60)
-				{
-					bullRightPoint = new Point2D.Double(i,j);
-					bullRightPointBool = true;
-				}
-		    }	
-	    }
-		
-		
-		// bull top	
-		Point2D.Double bullTopPoint = new Point2D.Double(0,0);
-		boolean bullTopPointBool = false;
-		
-		for (j = (ylevel - bullAspectRatio); j < (ylevel + bullAspectRatio); j++) 
-	    {    	
-			if(bullTopPointBool==true)
-			{
-				break;				
-			}
-			for (i = (middle - bullAspectRatio); i < (middle + bullAspectRatio); i++) 
-			{
-				Color color = this.dartboardMapColors[i][j];
-				// if black red or green
-				if(color.getRed()>120 && color.getGreen()<80 && color.getBlue()<60)
-				{
-					bullTopPoint = new Point2D.Double(i,j);
-					bullTopPointBool = true;
-				}
-			}	
-	    }
-		
-		// bull bottom
-		Point2D.Double bullBottomPoint = new Point2D.Double(0,0);
-		boolean bullBottomPointBool = false;
-		
-		for (j = (ylevel + bullAspectRatio); j > (ylevel - bullAspectRatio); j--) 
-	    {    	
-			if(bullBottomPointBool==true)
-			{
-				break;				
-			}
-			for (i = (middle + bullAspectRatio); i > (middle - bullAspectRatio); i--) 
-			{
-				Color color = this.dartboardMapColors[i][j];
-				// if black red or green
-				if(color.getRed()>120 && color.getGreen()<80 && color.getBlue()<60)
-				{
-					bullBottomPoint = new Point2D.Double(i,j);
-					bullBottomPointBool = true;
-				}
-		    }	
-	    }
+		// bull left, right, top, bottom
+		int band = bullAspectRatio;
+		Point2D.Double bullLeftPoint = scanRedBull(middle - band, middle + band, true, ylevel - band, ylevel + band, true, true);
+		Point2D.Double bullRightPoint = scanRedBull(middle + band, middle - band, false, ylevel - band, ylevel + band, true, true);
+		Point2D.Double bullTopPoint = scanRedBull(ylevel - band, ylevel + band, true, middle - band, middle + band, true, false);
+		Point2D.Double bullBottomPoint = scanRedBull(ylevel + band, ylevel - band, false, middle + band, middle - band, false, false);
 		
 		this.center = new Point2D.Double((int)(bullLeftPoint.x + bullRightPoint.x) / 2,(int)(bullTopPoint.y + bullBottomPoint.y) / 2);
 		this.boardRadius = (int)((leftSide + rightSide) / 2) - leftSide;
@@ -247,13 +220,13 @@ public class BoardMapper
 		   {
 			   Color color = this.dartboardMapColors[j][i];
 			   // if black red or green
-			   if(color.getRed()<140 && color.getGreen()>120 && color.getBlue()<80)
+			   if(isGreenRing(color))
 			   {
 				   y++;
 				   this.dartboardMapRegions[j][i] = this.dartboardMapColors[j][i].getRGB();
 				   
 			   }
-			   if(color.getRed()>120 && color.getGreen()<80 && color.getBlue()<60)
+			   if(isRedBull(color))
 			   {
 				   y++;
 				   this.dartboardMapRegions[j][i] = this.dartboardMapColors[j][i].getRGB();
@@ -265,73 +238,11 @@ public class BoardMapper
 	
 	public void findRadii(int x,int y)
 	{
-		int i = 0;
-		int tripleInnerRadius = 0;
-		int tripleOuterRadius = 0;
-		int doubleInnerRadius = 0;
-		int outerBullOuterRadius = 0;
-		int outerBullInnerRadius = 0;
-		
-		
-		// inner triple radius
-		for (i = (int)(x + (this.boardRadius / 3)); i < this.dartboardWidth; i++) 
-	    {    	
-			Color color = this.dartboardMapColors[i][y];
-			// if black red or green
-			if(color.getRed()<140 && color.getGreen()>120 && color.getBlue()<80)
-			{
-				tripleInnerRadius = i;
-				break;
-			}
-	    }		
-		
-		// outer triple radius
-		for (i = (int)(x + (this.boardRadius * 0.75)); i > x; i--) 
-		{    	
-			Color color = this.dartboardMapColors[i][y];
-			// if black red or green
-			if(color.getRed()<140 && color.getGreen()>120 && color.getBlue()<80)
-			{
-				tripleOuterRadius = i;
-				break;
-			}
-		}	
-		
-		// inner double radius		
-		for (i = (int)(x + (this.boardRadius * 0.75)); i < (x + this.boardRadius + 10); i++) 
-		{    	
-			Color color = this.dartboardMapColors[i][y];
-			// if black red or green
-			if(color.getRed()<140 && color.getGreen()>120 && color.getBlue()<80)
-			{
-				doubleInnerRadius = i;
-				break;
-			}
-		}	
-		
-		// outer outerbull radius 		
-		for (i = (int)(x + (this.boardRadius * 0.25)); i > x; i--) 
-		{    	
-			Color color = this.dartboardMapColors[i][y];
-			// if black red or green
-			if(color.getRed()<140 && color.getGreen()>120 && color.getBlue()<80)
-			{
-				outerBullOuterRadius = i;
-				break;
-			}
-		}	
-		
-		// inner outerbull radius		
-		for (i = x; i < (int)(x + (this.bullRadius *3)); i++) 
-		{    	
-			Color color = this.dartboardMapColors[i][y];
-			// if black red or green
-			if(color.getRed()<140 && color.getGreen()>120 && color.getBlue()<80)
-			{
-				outerBullInnerRadius = i;
-				break;
-			}
-		}	
+		int tripleInnerRadius = scanGreenRing((int)(x + (this.boardRadius / 3)), this.dartboardWidth, y, true);
+		int tripleOuterRadius = scanGreenRing((int)(x + (this.boardRadius * 0.75)), x, y, false);
+		int doubleInnerRadius = scanGreenRing((int)(x + (this.boardRadius * 0.75)), (x + this.boardRadius + 10), y, true);
+		int outerBullOuterRadius = scanGreenRing((int)(x + (this.boardRadius * 0.25)), x, y, false);
+		int outerBullInnerRadius = scanGreenRing(x, (int)(x + (this.bullRadius * 3)), y, true);
 		
 		System.out.println("Inner triple radius : " + (tripleInnerRadius - this.center.x));
 		System.out.println("outer triple radius : " + (tripleOuterRadius - this.center.x));

@@ -124,12 +124,10 @@ public void computeMesh()
 
 	int					x,y,squareIndex,n;
 	int					iEdge;
-	int					offx, offy, offAB;
 	int					toCompute;
 	int					offset;
 	float					t;
 	float					vx,vy;
-	int[]                                   edgeOffsetInfo;
 
 	nbLineToDraw = 0;
 	vx	     = 0.0f;
@@ -144,12 +142,7 @@ public void computeMesh()
 			n	        = 0;
 			while ( (iEdge = MetaballsTable.edgeCut[squareIndex][n++]) != -1)
 			{
-				edgeOffsetInfo          = MetaballsTable.edgeOffsetInfo[iEdge];
-				offx			= edgeOffsetInfo[0];
-				offy			= edgeOffsetInfo[1];
-				offAB			= edgeOffsetInfo[2];
-
-                            lineToDraw[nbLineToDraw++] = voxel[(x+offx) + resx*(y+offy)] + offAB;
+                            lineToDraw[nbLineToDraw++] = MetaballsTable.voxelIndexForEdge(voxel, resx, x, y, iEdge);
 			}
 
             toCompute = MetaballsTable.edgeToCompute[squareIndex];

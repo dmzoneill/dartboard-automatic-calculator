@@ -201,8 +201,7 @@ void computeEdgeVertex(int iBlob, int x, int y)
 	 gridVisited[offset]=true;    
 	
 	 // 
-	 int   iEdge, offx, offy, offAB;
-	 int[] edgeOffsetInfo;
+	 int   iEdge;
 	 int   squareIndex     = getSquareIndex(x,y);
 	 float vx = (float)x*stepx;
 	 float vy = (float)y*stepy;
@@ -210,13 +209,9 @@ void computeEdgeVertex(int iBlob, int x, int y)
 	 int   n = 0;
 	 while ( (iEdge = MetaballsTable.edgeCut[squareIndex][n++]) != -1)
 	 {
-		edgeOffsetInfo  = MetaballsTable.edgeOffsetInfo[iEdge];
-		offx			= edgeOffsetInfo[0];
-		offy			= edgeOffsetInfo[1];
-		offAB			= edgeOffsetInfo[2];
-	
+	    int edgeIndex = MetaballsTable.voxelIndexForEdge(voxel, resx, x, y, iEdge);
 	    if (blob[iBlob].nbLine < Blob.MAX_NBLINE) 
-	    	lineToDraw[nbLineToDraw++] = blob[iBlob].line[blob[iBlob].nbLine++] = voxel[(x+offx) + resx*(y+offy)] + offAB;
+	    	lineToDraw[nbLineToDraw++] = blob[iBlob].line[blob[iBlob].nbLine++] = edgeIndex;
 	    else
 	    	return;
 	 }

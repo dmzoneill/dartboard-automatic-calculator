@@ -148,8 +148,7 @@ public class CannyEdgeDetector {
 	 */
 	
 	public void setLowThreshold(float threshold) {
-		if (threshold < 0) throw new IllegalArgumentException();
-		lowThreshold = threshold;
+		lowThreshold = requireNonNegative(threshold);
 	}
  
 	/**
@@ -172,13 +171,22 @@ public class CannyEdgeDetector {
 	 */
 	
 	public void setHighThreshold(float threshold) {
-		if (threshold < 0) throw new IllegalArgumentException();
-		highThreshold = threshold;
+		highThreshold = requireNonNegative(threshold);
 	}
 
 	/**
-	 * The number of pixels across which the Gaussian kernel is applied.
-	 * The default value is 16.
+	 * Rejects a negative hysteresis threshold.
+	 *
+	 * @param threshold candidate threshold
+	 * @return the same threshold when it is zero or positive
+	 */
+	private static float requireNonNegative(float threshold) {
+		if (threshold < 0) throw new IllegalArgumentException();
+		return threshold;
+	}
+
+	/**
+	 * Gaussian convolution width in pixels. The default value is 16.
 	 * 
 	 * @return the radius of the convolution operation in pixels
 	 */

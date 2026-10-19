@@ -48,7 +48,18 @@ public static int edgeToCompute[] = {0,3,1,2,0,3,1,2,2,1,3,0,2,1,3,0};
 // bit 1 : X-1
 // bit 2 : Y+1
 // bit 3 : Y-1
-public static byte neightborVoxel[] = {0,10,9,3,5,15,12,6,6,12,12,5,3,9,10,0};  
+public static byte neightborVoxel[] = {0,10,9,3,5,15,12,6,6,12,12,5,3,9,10,0};
+
+// Voxel index for one marching-squares edge. Shared by Metaballs2D and BlobDetection.
+public static int voxelIndexForEdge(int[] voxel, int resx, int x, int y, int iEdge)
+{
+	int[] info = edgeOffsetInfo[iEdge];
+	int offx = info[0];
+	int offy = info[1];
+	int offAB = info[2];
+	return voxel[(x + offx) + resx * (y + offy)] + offAB;
+}
+
 public static void computeNeighborTable()
 {
  int iEdge;

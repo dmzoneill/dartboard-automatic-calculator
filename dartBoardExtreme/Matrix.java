@@ -68,24 +68,25 @@ final public class Matrix {
 
     // return C = A + B
     public Matrix plus(Matrix B) {
-        Matrix A = this;
-        if (B.M != A.M || B.N != A.N) throw new RuntimeException("Illegal matrix dimensions.");
-        Matrix C = new Matrix(M, N);
-        for (int i = 0; i < M; i++)
-            for (int j = 0; j < N; j++)
-                C.data[i][j] = A.data[i][j] + B.data[i][j];
-        return C;
+        return elementWise(B, false);
     }
 
 
     // return C = A - B
     public Matrix minus(Matrix B) {
+        return elementWise(B, true);
+    }
+
+    // Shared body of plus and minus. subtract selects A - B; otherwise A + B.
+    private Matrix elementWise(Matrix other, boolean subtract) {
         Matrix A = this;
-        if (B.M != A.M || B.N != A.N) throw new RuntimeException("Illegal matrix dimensions.");
+        if (other.M != A.M || other.N != A.N) throw new RuntimeException("Illegal matrix dimensions.");
         Matrix C = new Matrix(M, N);
         for (int i = 0; i < M; i++)
             for (int j = 0; j < N; j++)
-                C.data[i][j] = A.data[i][j] - B.data[i][j];
+                C.data[i][j] = subtract
+                    ? A.data[i][j] - other.data[i][j]
+                    : A.data[i][j] + other.data[i][j];
         return C;
     }
 
