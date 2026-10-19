@@ -3,6 +3,6 @@
 # Same tree as the root .ignore entry. Super-linter reads FILTER_REGEX_EXCLUDE
 # when building the file list; jscpd reads .ignore on its own.
 if [[ -n "${GITHUB_ENV:-}" ]]; then
-  echo 'FILTER_REGEX_EXCLUDE=dartboardextreme/com/jhlabs' >> "${GITHUB_ENV}"
+	echo 'FILTER_REGEX_EXCLUDE=dartboardextreme/com/jhlabs' >>"${GITHUB_ENV}"
 fi
 exit 0
