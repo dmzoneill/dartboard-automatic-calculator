@@ -3,124 +3,177 @@ package dartboardextreme.edgeDetection;
 import java.awt.Color;
 import java.awt.image.BufferedImage;
 
-public class SobelEdgeDetector 
-{
-	private BufferedImage sobel;	
-	
-	
-	public SobelEdgeDetector(BufferedImage img) {
-		// TODO Auto-generated constructor stub
-		this.sobelEdgeDetection(img);
-	}
-	
-	private void sobelEdgeDetection(BufferedImage img) {
-        BufferedImage edged = new BufferedImage(img.getWidth(),img.getHeight(),  BufferedImage.TYPE_INT_RGB);
-        
-        /*
-        float[] hx = new float[]{-0.5f,0,0.5f,
-                                 -0.3f,0,0.3f,
-                                 -0.3f,0,0.3f};
-        
-        float[] hy = new float[]{-0.3f,-0.3f,-0.3f,
-                                  0, 0, 0,
-                                  0.3f, 0.2f, 0.3f};
-       
-        
-        float[] hx = new float[]{-1,0,1,
-                                 -2,0,2,
-                                 -1,0,1};
-        
-        float[] hy = new float[]{-1,-2,-1,
-                                  0, 0, 0,
-                                  1, 2, 1};
-         
-        
-        */
-        float[] hx = new float[]{-0.4f,0,0.4f,
-                				 -0.8f,0,0.8f,
-                				 -0.4f,0,0.4f};
+/** Sobel edge detector used by the calibrator. */
+public class SobelEdgeDetector {
+  /** Width and height of the convolution kernel. */
+  private static final int KERNEL_SIZE = 3;
 
-        float[] hy = new float[]{-0.4f,-0.8f,-0.4f,
-                 				  0, 0, 0,
-                 				  0.4f, 0.8f, 0.4f};
-                 
-                
-        
-        int[] rgbX = new int[3]; int[] rgbY = new int[3];
-        
-         //ignore border pixels strategy
-        for(int x = 1; x < img.getWidth()-1; x++)
-            for(int y = 1; y < img.getHeight()-1; y++) {
-                convolvePixel(hx,3,3, img, x, y, rgbX);
-                convolvePixel(hy,3,3, img, x, y, rgbY);
-                
-                //instead of using sqrt function for eculidean distance
-                //just do an estimation
-                int r = Math.abs(rgbX[0]) + Math.abs(rgbY[0]);
-                int g = Math.abs(rgbX[1]) + Math.abs(rgbY[1]);
-                int b = Math.abs(rgbX[2]) + Math.abs(rgbY[2]);
-                
-                //range check
-                if(r > 255) r = 255;
-                if(g > 255) g = 255;
-                if(b > 255) b = 255;
-                
-                edged.setRGB(x, y,(r<<16)|(g<<8)|b);
-            }
-        this.sobel = edged;
-    }
-	
-    private int[] convolvePixel(float[] kernel, int kernWidth, int kernHeight, BufferedImage src, int x, int y, int[] rgb) {
-       if(rgb == null) rgb = new int[3];
-         
-        int halfWidth = kernWidth/2;
-        int halfHeight = kernHeight/2;
-        
-         /*this algorithm pretends as though the kernel is indexed from -halfWidth 
-                   *to halfWidth horizontally and -halfHeight to halfHeight vertically.  
-                   *This makes the center pixel indexed at row 0, column 0.*/
-        
-        for(int component = 0; component < 3; component++) {
-            float sum = 0;
-            for(int i = 0; i < kernel.length; i++) {
-               int row = (i/kernWidth)-halfWidth;  //current row in kernel
-               int column = (i-(kernWidth*row))-halfHeight; //current column in kernel
-                
-               //range check
-               if(x-row < 0 || x-row > src.getWidth()) continue;
-               if(y-column < 0 || y-column > src.getHeight()) continue;
-                
-                int srcRGB =src.getRGB(x-row,y-column);
-                sum = sum + kernel[i]*((srcRGB>>(16-8*component))&0xff);
-            }
-            rgb[component] = (int) sum;
+  /** Colour channels stored in the accumulator. */
+  private static final int CHANNEL_COUNT = 3;
+
+  /** Largest byte value. */
+  private static final int BYTE_MAX = 255;
+
+  /** Pixels darker than this stay transparent. */
+  private static final int DARK_LIMIT = 100;
+
+  /** Shift of the red byte. */
+  private static final int RED_SHIFT = 16;
+
+  /** Shift of one colour byte. */
+  private static final int CHANNEL_SHIFT = 8;
+
+  /** Mask of one byte. */
+  private static final int BYTE_MASK = 0xff;
+
+  /** Smaller Sobel weight. */
+  private static final float WEIGHT_SMALL = 0.4f;
+
+  /** Larger Sobel weight. */
+  private static final float WEIGHT_LARGE = 0.8f;
+
+  /** Edge image. */
+  private BufferedImage sobel;
+
+  /**
+   * Detects edges in an image.
+   *
+   * @param img source image
+   */
+  public SobelEdgeDetector(final BufferedImage img) {
+    this.sobelEdgeDetection(img);
+  }
+
+  /**
+   * Runs the Sobel convolution.
+   *
+   * @param img source image
+   */
+  private void sobelEdgeDetection(final BufferedImage img) {
+    final int imageType = BufferedImage.TYPE_INT_RGB;
+    final int width = img.getWidth();
+    final int height = img.getHeight();
+    final BufferedImage edged = new BufferedImage(width, height, imageType);
+    final float[] hx =
+        new float[] {
+          -WEIGHT_SMALL, 0, WEIGHT_SMALL,
+          -WEIGHT_LARGE, 0, WEIGHT_LARGE,
+          -WEIGHT_SMALL, 0, WEIGHT_SMALL
+        };
+    final float[] hy =
+        new float[] {
+          -WEIGHT_SMALL,
+          -WEIGHT_LARGE,
+          -WEIGHT_SMALL,
+          0,
+          0,
+          0,
+          WEIGHT_SMALL,
+          WEIGHT_LARGE,
+          WEIGHT_SMALL
+        };
+    final int[] rgbX = new int[CHANNEL_COUNT];
+    final int[] rgbY = new int[CHANNEL_COUNT];
+
+    // Ignore border pixels.
+    for (int x = 1; x < img.getWidth() - 1; x++) {
+      for (int y = 1; y < img.getHeight() - 1; y++) {
+        convolvePixel(hx, KERNEL_SIZE, KERNEL_SIZE, img, x, y, rgbX);
+        convolvePixel(hy, KERNEL_SIZE, KERNEL_SIZE, img, x, y, rgbY);
+        int red = Math.abs(rgbX[0]) + Math.abs(rgbY[0]);
+        int green = Math.abs(rgbX[1]) + Math.abs(rgbY[1]);
+        int blue = Math.abs(rgbX[2]) + Math.abs(rgbY[2]);
+        if (red > BYTE_MAX) {
+          red = BYTE_MAX;
         }
-       return rgb;
+        if (green > BYTE_MAX) {
+          green = BYTE_MAX;
+        }
+        if (blue > BYTE_MAX) {
+          blue = BYTE_MAX;
+        }
+        final int packed = (red << RED_SHIFT) | (green << CHANNEL_SHIFT) | blue;
+        edged.setRGB(x, y, packed);
+      }
     }
-    
-    public BufferedImage edges()
-    {
-    	BufferedImage argb = new BufferedImage(this.sobel.getWidth(),this.sobel.getHeight(),BufferedImage.TYPE_INT_ARGB);
-	    
-	    for (int m = 0; m < this.sobel.getWidth(); m++) 
-		{    	
-	  		for (int c = 0; c < this.sobel.getHeight(); c++) 
-	  		 {
-	  			 Color color = new Color(this.sobel.getRGB(m, c));	
+    this.sobel = edged;
+  }
 
-	  			 Color tColor = new Color(color.getRed(),color.getGreen(),color.getBlue(),0);
-	  			 if(color.getGreen()<100 && color.getBlue()<100 && color.getRed() < 100)
-	  			 {
-	  				argb.setRGB(m, c, tColor.getRGB());
-	  			 }
-	  			 else
-	  			 {
-	  				argb.setRGB(m, c, Color.cyan.getRGB());	  				 
-	  			 }
-	  		 }
-		}	    	    
-    	
-    	return argb;
+  /**
+   * Applies one kernel at a pixel.
+   *
+   * @param kernel convolution weights
+   * @param kernWidth kernel width
+   * @param kernHeight kernel height
+   * @param src source image
+   * @param x pixel x
+   * @param y pixel y
+   * @param rgb channel accumulator; created when null
+   * @return the accumulator
+   */
+  private int[] convolvePixel(
+      final float[] kernel,
+      final int kernWidth,
+      final int kernHeight,
+      final BufferedImage src,
+      final int x,
+      final int y,
+      final int[] rgb) {
+    final int[] channels;
+    if (rgb == null) {
+      channels = new int[CHANNEL_COUNT];
+    } else {
+      channels = rgb;
     }
+    final int halfWidth = kernWidth / 2;
+    final int halfHeight = kernHeight / 2;
+    for (int component = 0; component < CHANNEL_COUNT; component++) {
+      float sum = 0;
+      for (int i = 0; i < kernel.length; i++) {
+        final int row = (i / kernWidth) - halfWidth;
+        final int column = (i - (kernWidth * row)) - halfHeight;
+        if (x - row < 0 || x - row > src.getWidth()) {
+          continue;
+        }
+        if (y - column < 0 || y - column > src.getHeight()) {
+          continue;
+        }
+        final int srcRgb = src.getRGB(x - row, y - column);
+        final int shift = RED_SHIFT - CHANNEL_SHIFT * component;
+        sum = sum + kernel[i] * ((srcRgb >> shift) & BYTE_MASK);
+      }
+      channels[component] = (int) sum;
+    }
+    return channels;
+  }
 
+  /**
+   * Returns the edges, with dark pixels transparent and the rest cyan.
+   *
+   * @return the coloured edge image
+   */
+  public BufferedImage edges() {
+    final int argbType = BufferedImage.TYPE_INT_ARGB;
+    final int width = this.sobel.getWidth();
+    final int height = this.sobel.getHeight();
+    final BufferedImage argb = new BufferedImage(width, height, argbType);
+    for (int m = 0; m < this.sobel.getWidth(); m++) {
+      for (int c = 0; c < this.sobel.getHeight(); c++) {
+        final Color color = new Color(this.sobel.getRGB(m, c));
+        final int alpha = 0;
+        final Color transparent =
+            new Color(color.getRed(), color.getGreen(), color.getBlue(), alpha);
+        final boolean dark =
+            color.getGreen() < DARK_LIMIT
+                && color.getBlue() < DARK_LIMIT
+                && color.getRed() < DARK_LIMIT;
+        if (dark) {
+          argb.setRGB(m, c, transparent.getRGB());
+        } else {
+          argb.setRGB(m, c, Color.cyan.getRGB());
+        }
+      }
+    }
+    return argb;
+  }
 }

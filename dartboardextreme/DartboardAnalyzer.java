@@ -34,15 +34,15 @@ public final class DartboardAnalyzer {
     mapper2.exportRegion();
 
     final BufferedImage dick2 = mapper.getDartBoard();
-    new CalibratorUI(
-        dick2,
-        mapper2.getCenter(),
-        mapper2.getBullRadius(),
-        mapper2.getBoardRadius(),
-        mapper2.getDoubleInnerRadius(),
-        mapper2.getTripleOuterRadius(),
-        mapper2.getTripleInnerRadius(),
-        mapper2.getOuterBullOuterRadius(),
-        mapper2.getOuterBullInnerRadius());
+    final CalibratorUI.BoardGeometry geometry =
+        new CalibratorUI.BoardGeometry(
+            mapper2.getBullRadius(),
+            mapper2.getBoardRadius(),
+            mapper2.getDoubleInnerRadius(),
+            mapper2.getTripleOuterRadius(),
+            mapper2.getTripleInnerRadius(),
+            mapper2.getOuterBullOuterRadius(),
+            mapper2.getOuterBullInnerRadius());
+    new CalibratorUI(dick2, mapper2.getCenter(), geometry);
   }
 }

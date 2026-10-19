@@ -1,7 +1,5 @@
 package dartboardextreme;
 
-
-
 import java.awt.Color;
 import java.awt.Container;
 import java.awt.Graphics;
@@ -13,90 +11,136 @@ import java.awt.event.MouseMotionAdapter;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
-
 import javax.swing.JFrame;
 import javax.swing.JPanel;
-import javax.swing.border.TitledBorder;
 
+/** Window that shows an image and lets the user drag it. */
 public class BufferedImageMouseDrag extends JFrame {
-  DisplayCanvas canvas;
+  /** Window width in pixels. */
+  private static final int WINDOW_WIDTH = 1000;
 
+  /** Window height in pixels. */
+  private static final int WINDOW_HEIGHT = 800;
+
+  /** Canvas that owns the image. */
+  private DisplayCanvas canvas;
+
+  /** Opens the drag window. */
   public BufferedImageMouseDrag() {
     super();
-    Container container = getContentPane();
-
+    final Container container = getContentPane();
     canvas = new DisplayCanvas();
     container.add(canvas);
-
-    addWindowListener(new WindowAdapter() {
-      public void windowClosing(WindowEvent e) {
-        System.exit(0);
-      }
-    });
-    setSize(1000, 800);
+    addWindowListener(
+        new WindowAdapter() {
+          /**
+           * Ends the program when the window closes.
+           *
+           * @param event the window event
+           */
+          @Override
+          public void windowClosing(final WindowEvent event) {
+            System.exit(0);
+          }
+        });
+    setSize(WINDOW_WIDTH, WINDOW_HEIGHT);
     setVisible(true);
   }
 
-  public static void main(String arg[]) {
+  /**
+   * Starts the drag window.
+   *
+   * @param args unused
+   */
+  public static void main(final String[] args) {
     new BufferedImageMouseDrag();
   }
 }
 
+/** Panel that loads a photograph and follows the mouse. */
 class DisplayCanvas extends JPanel {
-  int x, y;
-  int width,height;
+  /** Sample photograph. */
+  private static final String SAMPLE_IMAGE = "DSCN0504.JPG";
 
-  BufferedImage bi;
+  /** Image x offset. */
+  private int x;
 
+  /** Image y offset. */
+  private int y;
+
+  /** Image width. */
+  private int width;
+
+  /** Image height. */
+  private int height;
+
+  /** Buffered copy of the photograph. */
+  private BufferedImage bi;
+
+  /** Loads the sample image and prepares the buffer. */
   DisplayCanvas() {
-	  
+    final Image image = getToolkit().getImage(SAMPLE_IMAGE);
+    final MediaTracker tracker = new MediaTracker(this);
+    tracker.addImage(image, 1);
+    try {
+      tracker.waitForAll();
+    } catch (final Exception ex) {
+      System.out.println("Exception while loading image.");
+    }
 
-	    Image image = getToolkit().getImage("DSCN0504.JPG");
+    if (image.getWidth(this) == -1) {
+      System.out.println("no gif file");
+      System.exit(0);
+    }
 
-	    MediaTracker mt = new MediaTracker(this);
-	    mt.addImage(image, 1);
-	    try {
-	      mt.waitForAll();
-	    } catch (Exception e) {
-	      System.out.println("Exception while loading image.");
-	    }
-	    
-	    
-	    if (image.getWidth(this) == -1) {
-	      System.out.println("no gif file");
-	      System.exit(0);
-	    }
+    width = image.getWidth(this);
+    height = image.getHeight(this);
 
-	    width = image.getWidth(this);
-	    height = image.getHeight(this);  
-	  
     setBackground(Color.white);
     setSize(width, height);
     addMouseMotionListener(new MouseMotionHandler());
 
-    
-    bi = new BufferedImage(image.getWidth(this), image.getHeight(this),
-        BufferedImage.TYPE_INT_ARGB);
-    Graphics2D big = bi.createGraphics();
+    final int imageType = BufferedImage.TYPE_INT_ARGB;
+    final int imageWidth = image.getWidth(this);
+    final int imageHeight = image.getHeight(this);
+    bi = new BufferedImage(imageWidth, imageHeight, imageType);
+    final Graphics2D big = bi.createGraphics();
     big.drawImage(image, 0, 0, this);
   }
 
-  public void paintComponent(Graphics g) {
-    super.paintComponent(g);
-    Graphics2D g2D = (Graphics2D) g;
-   
-    g2D.drawImage(bi, x + width, y + height, this);
+  /**
+   * Paints the buffered image at the current drag offset.
+   *
+   * @param graphics destination
+   */
+  @Override
+  public void paintComponent(final Graphics graphics) {
+    super.paintComponent(graphics);
+    final Graphics2D g2d = (Graphics2D) graphics;
+    g2d.drawImage(bi, x + width, y + height, this);
   }
 
+  /** Updates the image offset while the mouse is dragged. */
   class MouseMotionHandler extends MouseMotionAdapter {
-    public void mouseDragged(MouseEvent e) {
-      x = e.getX() - width;
-      y = e.getY() - height;
+    /**
+     * Moves the image with the pointer.
+     *
+     * @param event the drag event
+     */
+    @Override
+    public void mouseDragged(final MouseEvent event) {
+      x = event.getX() - width;
+      y = event.getY() - height;
       repaint();
     }
-    public void mouseClick (MouseEvent e)
-    {
-    	
+
+    /**
+     * Present for the original listener shape. Does nothing.
+     *
+     * @param event the click event
+     */
+    public void mouseClick(final MouseEvent event) {
+      // no click behaviour
     }
   }
 }
