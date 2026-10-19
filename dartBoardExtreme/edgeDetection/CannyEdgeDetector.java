@@ -1,576 +1,884 @@
 package dartBoardExtreme.edgeDetection;
 
 import java.awt.image.BufferedImage;
+import java.awt.image.WritableRaster;
 import java.util.Arrays;
 
 /**
- * <p><em>This software has been released into the public domain.
- * <strong>Please read the notes in this source file for additional information.
- * </strong></em></p>
- * 
+ * Configurable Canny edge detector.
+ *
+ * <p>This software has been released into the public domain. Please read the
+ *
+ * <p>notes in this source file for additional information.
+ *
  * <p>This class provides a configurable implementation of the Canny edge
- * detection algorithm. This classic algorithm has a number of shortcomings,
- * but remains an effective tool in many scenarios. <em>This class is designed
- * for single threaded use only.</em></p>
- * 
- * <p>Sample usage:</p>
- * 
- * <pre><code>
- * //create the detector
+ *
+ * <p>detection algorithm. This classic algorithm has a number of shortcomings,
+ *
+ * <p>but remains an effective tool
+ *
+ * <p>in many scenarios. This class is designed for single threaded use only.
+ *
+ * <p>Sample usage:
+ *
+ * <pre>
  * CannyEdgeDetector detector = new CannyEdgeDetector();
- * //adjust its parameters as desired
  * detector.setLowThreshold(0.5f);
  * detector.setHighThreshold(1f);
- * //apply it to an image
  * detector.setSourceImage(frame);
  * detector.process();
  * BufferedImage edges = detector.getEdgesImage();
- * </code></pre>
- * 
- * <p>For a more complete understanding of this edge detector's parameters
- * consult an explanation of the algorithm.</p>
- * 
- * @author Tom Gibara
+ * </pre>
  *
+ * <p>For a more complete understanding of this edge detector's parameters
+ *
+ * <p>consult an explanation of the algorithm.
+ *
+ * @author Tom Gibara
  */
-
 public class CannyEdgeDetector {
 
-	// statics
-	
-	private final static float GAUSSIAN_CUT_OFF = 0.005f;
-	private final static float MAGNITUDE_SCALE = 100F;
-	private final static float MAGNITUDE_LIMIT = 1000F;
-	private final static int MAGNITUDE_MAX = (int) (MAGNITUDE_SCALE * MAGNITUDE_LIMIT);
+  /** Gaussian weight treated as zero. */
+  private static final float GAUSSIAN_CUT_OFF = 0.005f;
 
-	// fields
-	
-	private int height;
-	private int width;
-	private int picsize;
-	private int[] data;
-	private int[] magnitude;
-	private BufferedImage sourceImage;
-	private BufferedImage edgesImage;
-	
-	private float gaussianKernelRadius;
-	private float lowThreshold;
-	private float highThreshold;
-	private int gaussianKernelWidth;
-	private boolean contrastNormalized;
+  /** Scale applied to gradient magnitudes before they are stored. */
+  private static final float MAGNITUDE_SCALE = 100f;
 
-	private float[] xConv;
-	private float[] yConv;
-	private float[] xGradient;
-	private float[] yGradient;
-	
-	// constructors
-	
-	/**
-	 * Constructs a new detector with default parameters.
-	 */
-	
-	public CannyEdgeDetector() {
-		lowThreshold = 2.5f;
-		highThreshold = 7.5f;
-		gaussianKernelRadius = 2f;
-		gaussianKernelWidth = 16;
-		contrastNormalized = false;
-	}
+  /** Gradient magnitude that saturates the stored value. */
+  private static final float MAGNITUDE_LIMIT = 1000f;
 
-	// accessors
-	
-	/**
-	 * The image that provides the luminance data used by this detector to
-	 * generate edges.
-	 * 
-	 * @return the source image, or null
-	 */
-	
-	public BufferedImage getSourceImage() {
-		return sourceImage;
-	}
-	
-	/**
-	 * Specifies the image that will provide the luminance data in which edges
-	 * will be detected. A source image must be set before the process method
-	 * is called.
-	 *  
-	 * @param image a source of luminance data
-	 */
-	
-	public void setSourceImage(BufferedImage image) {
-		sourceImage = image;
-	}
+  /** Stored magnitude used at and above the limit. */
+  private static final float SCALED_LIMIT = MAGNITUDE_SCALE * MAGNITUDE_LIMIT;
 
-	/**
-	 * Obtains an image containing the edges detected during the last call to
-	 * the process method. The buffered image is an opaque image of type
-	 * BufferedImage.TYPE_INT_ARGB in which edge pixels are white and all other
-	 * pixels are black.
-	 * 
-	 * @return an image containing the detected edges, or null if the process
-	 * method has not yet been called.
-	 */
-	
-	public BufferedImage getEdgesImage() {
-		return edgesImage;
-	}
- 
-	/**
-	 * Sets the edges image. Calling this method will not change the operation
-	 * of the edge detector in any way. It is intended to provide a means by
-	 * which the memory referenced by the detector object may be reduced.
-	 * 
-	 * @param edgesImage expected (though not required) to be null
-	 */
-	
-	public void setEdgesImage(BufferedImage edgesImage) {
-		this.edgesImage = edgesImage;
-	}
+  /** Stored magnitude used at and above the limit. */
+  private static final int MAGNITUDE_MAX = (int) SCALED_LIMIT;
 
-	/**
-	 * The low threshold for hysteresis. The default value is 2.5.
-	 * 
-	 * @return the low hysteresis threshold
-	 */
-	
-	public float getLowThreshold() {
-		return lowThreshold;
-	}
-	
-	/**
-	 * Sets the low threshold for hysteresis. Suitable values for this parameter
-	 * must be determined experimentally for each application. It is nonsensical
-	 * (though not prohibited) for this value to exceed the high threshold value.
-	 * 
-	 * @param threshold a low hysteresis threshold
-	 */
-	
-	public void setLowThreshold(float threshold) {
-		lowThreshold = requireNonNegative(threshold);
-	}
- 
-	/**
-	 * The high threshold for hysteresis. The default value is 7.5.
-	 * 
-	 * @return the high hysteresis threshold
-	 */
-	
-	public float getHighThreshold() {
-		return highThreshold;
-	}
-	
-	/**
-	 * Sets the high threshold for hysteresis. Suitable values for this
-	 * parameter must be determined experimentally for each application. It is
-	 * nonsensical (though not prohibited) for this value to be less than the
-	 * low threshold value.
-	 * 
-	 * @param threshold a high hysteresis threshold
-	 */
-	
-	public void setHighThreshold(float threshold) {
-		highThreshold = requireNonNegative(threshold);
-	}
+  /** Default low hysteresis threshold. */
+  private static final float DEFAULT_LOW_THRESHOLD = 2.5f;
 
-	/**
-	 * Rejects a negative hysteresis threshold.
-	 *
-	 * @param threshold candidate threshold
-	 * @return the same threshold when it is zero or positive
-	 */
-	private static float requireNonNegative(float threshold) {
-		if (threshold < 0) throw new IllegalArgumentException();
-		return threshold;
-	}
+  /** Default high hysteresis threshold. */
+  private static final float DEFAULT_HIGH_THRESHOLD = 7.5f;
 
-	/**
-	 * Gaussian convolution width in pixels. The default value is 16.
-	 * 
-	 * @return the radius of the convolution operation in pixels
-	 */
-	
-	public int getGaussianKernelWidth() {
-		return gaussianKernelWidth;
-	}
-	
-	/**
-	 * The number of pixels across which the Gaussian kernel is applied.
-	 * This implementation will reduce the radius if the contribution of pixel
-	 * values is deemed negligable, so this is actually a maximum radius.
-	 * 
-	 * @param gaussianKernelWidth a radius for the convolution operation in
-	 * pixels, at least 2.
-	 */
-	
-	public void setGaussianKernelWidth(int gaussianKernelWidth) {
-		if (gaussianKernelWidth < 2) throw new IllegalArgumentException();
-		this.gaussianKernelWidth = gaussianKernelWidth;
-	}
+  /** Default Gaussian radius. */
+  private static final float DEFAULT_KERNEL_RADIUS = 2f;
 
-	/**
-	 * The radius of the Gaussian convolution kernel used to smooth the source
-	 * image prior to gradient calculation. The default value is 16.
-	 * 
-	 * @return the Gaussian kernel radius in pixels
-	 */
-	
-	public float getGaussianKernelRadius() {
-		return gaussianKernelRadius;
-	}
-	
-	/**
-	 * Sets the radius of the Gaussian convolution kernel used to smooth the
-	 * source image prior to gradient calculation.
-	 * 
-	 * @return a Gaussian kernel radius in pixels, must exceed 0.1f.
-	 */
-	
-	public void setGaussianKernelRadius(float gaussianKernelRadius) {
-		if (gaussianKernelRadius < 0.1f) throw new IllegalArgumentException();
-		this.gaussianKernelRadius = gaussianKernelRadius;
-	}
-	
-	/**
-	 * Whether the luminance data extracted from the source image is normalized
-	 * by linearizing its histogram prior to edge extraction. The default value
-	 * is false.
-	 * 
-	 * @return whether the contrast is normalized
-	 */
-	
-	public boolean isContrastNormalized() {
-		return contrastNormalized;
-	}
-	
-	/**
-	 * Sets whether the contrast is normalized
-	 * @param contrastNormalized true if the contrast should be normalized,
-	 * false otherwise
-	 */
-	
-	public void setContrastNormalized(boolean contrastNormalized) {
-		this.contrastNormalized = contrastNormalized;
-	}
-	
-	// methods
-	
-	public void process() {
-		width = sourceImage.getWidth();
-		height = sourceImage.getHeight();
-		picsize = width * height;
-		initArrays();
-		readLuminance();
-		if (contrastNormalized) normalizeContrast();
-		computeGradients(gaussianKernelRadius, gaussianKernelWidth);
-		int low = Math.round(lowThreshold * MAGNITUDE_SCALE);
-		int high = Math.round( highThreshold * MAGNITUDE_SCALE);
-		performHysteresis(low, high);
-		thresholdEdges();
-		writeEdges(data);
-	}
- 
-	// private utility methods
-	
-	private void initArrays() {
-		if (data == null || picsize != data.length) {
-			data = new int[picsize];
-			magnitude = new int[picsize];
+  /** Default Gaussian width in pixels. */
+  private static final int DEFAULT_KERNEL_WIDTH = 16;
 
-			xConv = new float[picsize];
-			yConv = new float[picsize];
-			xGradient = new float[picsize];
-			yGradient = new float[picsize];
-		}
-	}
-	
-	//NOTE: The elements of the method below (specifically the technique for
-	//non-maximal suppression and the technique for gradient computation)
-	//are derived from an implementation posted in the following forum (with the
-	//clear intent of others using the code):
-	//  http://forum.java.sun.com/thread.jspa?threadID=546211&start=45&tstart=0
-	//My code effectively mimics the algorithm exhibited above.
-	//Since I don't know the providence of the code that was posted it is a
-	//possibility (though I think a very remote one) that this code violates
-	//someone's intellectual property rights. If this concerns you feel free to
-	//contact me for an alternative, though less efficient, implementation.
-	
-	private void computeGradients(float kernelRadius, int kernelWidth) {
-		
-		//generate the gaussian convolution masks
-		float kernel[] = new float[kernelWidth];
-		float diffKernel[] = new float[kernelWidth];
-		int kwidth;
-		for (kwidth = 0; kwidth < kernelWidth; kwidth++) {
-			float g1 = gaussian(kwidth, kernelRadius);
-			if (g1 <= GAUSSIAN_CUT_OFF && kwidth >= 2) break;
-			float g2 = gaussian(kwidth - 0.5f, kernelRadius);
-			float g3 = gaussian(kwidth + 0.5f, kernelRadius);
-			kernel[kwidth] = (g1 + g2 + g3) / 3f / (2f * (float) Math.PI * kernelRadius * kernelRadius);
-			diffKernel[kwidth] = g3 - g2;
-		}
+  /** Smallest accepted Gaussian width. */
+  private static final int MIN_KERNEL_WIDTH = 2;
 
-		int initX = kwidth - 1;
-		int maxX = width - (kwidth - 1);
-		int initY = width * (kwidth - 1);
-		int maxY = width * (height - (kwidth - 1));
-		
-		//perform convolution in x and y directions
-		for (int x = initX; x < maxX; x++) {
-			for (int y = initY; y < maxY; y += width) {
-				int index = x + y;
-				float sumX = data[index] * kernel[0];
-				float sumY = sumX;
-				int xOffset = 1;
-				int yOffset = width;
-				for(; xOffset < kwidth ;) {
-					sumY += kernel[xOffset] * (data[index - yOffset] + data[index + yOffset]);
-					sumX += kernel[xOffset] * (data[index - xOffset] + data[index + xOffset]);
-					yOffset += width;
-					xOffset++;
-				}
-				
-				yConv[index] = sumY;
-				xConv[index] = sumX;
-			}
- 
-		}
- 
-		for (int x = initX; x < maxX; x++) {
-			for (int y = initY; y < maxY; y += width) {
-				float sum = 0f;
-				int index = x + y;
-				for (int i = 1; i < kwidth; i++)
-					sum += diffKernel[i] * (yConv[index - i] - yConv[index + i]);
- 
-				xGradient[index] = sum;
-			}
- 
-		}
+  /** Smallest accepted Gaussian radius. */
+  private static final float MIN_KERNEL_RADIUS = 0.1f;
 
-		for (int x = kwidth; x < width - kwidth; x++) {
-			for (int y = initY; y < maxY; y += width) {
-				float sum = 0.0f;
-				int index = x + y;
-				int yOffset = width;
-				for (int i = 1; i < kwidth; i++) {
-					sum += diffKernel[i] * (xConv[index - yOffset] - xConv[index + yOffset]);
-					yOffset += width;
-				}
- 
-				yGradient[index] = sum;
-			}
- 
-		}
- 
-		initX = kwidth;
-		maxX = width - kwidth;
-		initY = width * kwidth;
-		maxY = width * (height - kwidth);
-		for (int x = initX; x < maxX; x++) {
-			for (int y = initY; y < maxY; y += width) {
-				int index = x + y;
-				int indexN = index - width;
-				int indexS = index + width;
-				int indexW = index - 1;
-				int indexE = index + 1;
-				int indexNW = indexN - 1;
-				int indexNE = indexN + 1;
-				int indexSW = indexS - 1;
-				int indexSE = indexS + 1;
-				
-				float xGrad = xGradient[index];
-				float yGrad = yGradient[index];
-				float gradMag = hypot(xGrad, yGrad);
+  /** Samples averaged into each Gaussian kernel weight. */
+  private static final float KERNEL_SAMPLE_COUNT = 3f;
 
-				//perform non-maximal supression
-				float nMag = hypot(xGradient[indexN], yGradient[indexN]);
-				float sMag = hypot(xGradient[indexS], yGradient[indexS]);
-				float wMag = hypot(xGradient[indexW], yGradient[indexW]);
-				float eMag = hypot(xGradient[indexE], yGradient[indexE]);
-				float neMag = hypot(xGradient[indexNE], yGradient[indexNE]);
-				float seMag = hypot(xGradient[indexSE], yGradient[indexSE]);
-				float swMag = hypot(xGradient[indexSW], yGradient[indexSW]);
-				float nwMag = hypot(xGradient[indexNW], yGradient[indexNW]);
-				float tmp;
-				/*
-				 * An explanation of what's happening here, for those who want
-				 * to understand the source: This performs the "non-maximal
-				 * supression" phase of the Canny edge detection in which we
-				 * need to compare the gradient magnitude to that in the
-				 * direction of the gradient; only if the value is a local
-				 * maximum do we consider the point as an edge candidate.
-				 * 
-				 * We need to break the comparison into a number of different
-				 * cases depending on the gradient direction so that the
-				 * appropriate values can be used. To avoid computing the
-				 * gradient direction, we use two simple comparisons: first we
-				 * check that the partial derivatives have the same sign (1)
-				 * and then we check which is larger (2). As a consequence, we
-				 * have reduced the problem to one of four identical cases that
-				 * each test the central gradient magnitude against the values at
-				 * two points with 'identical support'; what this means is that
-				 * the geometry required to accurately interpolate the magnitude
-				 * of gradient function at those points has an identical
-				 * geometry (upto right-angled-rotation/reflection).
-				 * 
-				 * When comparing the central gradient to the two interpolated
-				 * values, we avoid performing any divisions by multiplying both
-				 * sides of each inequality by the greater of the two partial
-				 * derivatives. The common comparand is stored in a temporary
-				 * variable (3) and reused in the mirror case (4).
-				 * 
-				 */
-				if (xGrad * yGrad <= (float) 0 /*(1)*/
-					? Math.abs(xGrad) >= Math.abs(yGrad) /*(2)*/
-						? (tmp = Math.abs(xGrad * gradMag)) >= Math.abs(yGrad * neMag - (xGrad + yGrad) * eMag) /*(3)*/
-							&& tmp > Math.abs(yGrad * swMag - (xGrad + yGrad) * wMag) /*(4)*/
-						: (tmp = Math.abs(yGrad * gradMag)) >= Math.abs(xGrad * neMag - (yGrad + xGrad) * nMag) /*(3)*/
-							&& tmp > Math.abs(xGrad * swMag - (yGrad + xGrad) * sMag) /*(4)*/
-					: Math.abs(xGrad) >= Math.abs(yGrad) /*(2)*/
-						? (tmp = Math.abs(xGrad * gradMag)) >= Math.abs(yGrad * seMag + (xGrad - yGrad) * eMag) /*(3)*/
-							&& tmp > Math.abs(yGrad * nwMag + (xGrad - yGrad) * wMag) /*(4)*/
-						: (tmp = Math.abs(yGrad * gradMag)) >= Math.abs(xGrad * seMag + (yGrad - xGrad) * sMag) /*(3)*/
-							&& tmp > Math.abs(xGrad * nwMag + (yGrad - xGrad) * nMag) /*(4)*/
-					) {
-					magnitude[index] = gradMag >= MAGNITUDE_LIMIT ? MAGNITUDE_MAX : (int) (MAGNITUDE_SCALE * gradMag);
-					//NOTE: The orientation of the edge is not employed by this
-					//implementation. It is a simple matter to compute it at
-					//this point as: Math.atan2(yGrad, xGrad);
-				} else {
-					magnitude[index] = 0;
-				}
-			}
-		}
-	}
- 
-	//NOTE: It is quite feasible to replace the implementation of this method
-	//with one which only loosely approximates the hypot function. I've tested
-	//simple approximations such as Math.abs(x) + Math.abs(y) and they work fine.
-	private float hypot(float x, float y) {
-		if (x == 0f) return y;
-		if (y == 0f) return x;
-		return (float) Math.sqrt(x * x + y * y);
-	}
- 
-	private float gaussian(float x, float sigma) {
-		return (float) Math.exp(-(x * x) / (2f * sigma * sigma));
-	}
- 
-	private void performHysteresis(int low, int high) {
-		//NOTE: this implementation reuses the data array to store both
-		//luminance data from the image, and edge intensity from the processing.
-		//This is done for memory efficiency, other implementations may wish
-		//to separate these functions.
-		Arrays.fill(data, 0);
- 
-		int offset = 0;
-		for (int x = 0; x < width; x++) {
-			for (int y = 0; y < height; y++) {
-				if (data[offset] == 0 && magnitude[offset] >= high) {
-					follow(x, y, offset, low);
-				}
-				offset++;
-			}
-		}
- 	}
- 
-	private void follow(int x1, int y1, int i1, int threshold) {
-		int x0 = x1 == 0 ? x1 : x1 - 1;
-		int x2 = x1 == width - 1 ? x1 : x1 + 1;
-		int y0 = y1 == 0 ? y1 : y1 - 1;
-		int y2 = y1 == height -1 ? y1 : y1 + 1;
-		
-		data[i1] = magnitude[i1];
-		for (int x = x0; x <= x2; x++) {
-			for (int y = y0; y <= y2; y++) {
-				int i2 = x + y * width;
-				if ((y != y1 || x != x1)
-					&& data[i2] == 0 
-					&& magnitude[i2] >= threshold) {
-					follow(x, y, i2, threshold);
-					return;
-				}
-			}
-		}
-	}
+  /** Factor in the Gaussian normalisation. */
+  private static final float KERNEL_TWO = 2f;
 
-	private void thresholdEdges() {
-		for (int i = 0; i < picsize; i++) {
-			data[i] = data[i] > 0 ? -1 : 0xff000000;
-		}
-	}
-	
-	private int luminance(float r, float g, float b) {
-		return Math.round(0.299f * r + 0.587f * g + 0.114f * b);
-	}
-	
-	private void readLuminance() {
-		int type = sourceImage.getType();
-		if (type == BufferedImage.TYPE_INT_RGB || type == BufferedImage.TYPE_INT_ARGB) {
-			int[] pixels = (int[]) sourceImage.getData().getDataElements(0, 0, width, height, null);
-			for (int i = 0; i < picsize; i++) {
-				int p = pixels[i];
-				int r = (p & 0xff0000) >> 16;
-				int g = (p & 0xff00) >> 8;
-				int b = p & 0xff;
-				data[i] = luminance(r, g, b);
-			}
-		} else if (type == BufferedImage.TYPE_BYTE_GRAY) {
-			byte[] pixels = (byte[]) sourceImage.getData().getDataElements(0, 0, width, height, null);
-			for (int i = 0; i < picsize; i++) {
-				data[i] = (pixels[i] & 0xff);
-			}
-		} else if (type == BufferedImage.TYPE_USHORT_GRAY) {
-			short[] pixels = (short[]) sourceImage.getData().getDataElements(0, 0, width, height, null);
-			for (int i = 0; i < picsize; i++) {
-				data[i] = (pixels[i] & 0xffff) / 256;
-			}
-		} else if (type == BufferedImage.TYPE_3BYTE_BGR) {
-            byte[] pixels = (byte[]) sourceImage.getData().getDataElements(0, 0, width, height, null);
-            int offset = 0;
-            for (int i = 0; i < picsize; i++) {
-                int b = pixels[offset++] & 0xff;
-                int g = pixels[offset++] & 0xff;
-                int r = pixels[offset++] & 0xff;
-                data[i] = luminance(r, g, b);
-            }
-        } else {
-			throw new IllegalArgumentException("Unsupported image type: " + type);
-		}
-	}
- 
-	private void normalizeContrast() {
-		int[] histogram = new int[256];
-		for (int i = 0; i < data.length; i++) {
-			histogram[data[i]]++;
-		}
-		int[] remap = new int[256];
-		int sum = 0;
-		int j = 0;
-		for (int i = 0; i < histogram.length; i++) {
-			sum += histogram[i];
-			int target = sum*255/picsize;
-			for (int k = j+1; k <=target; k++) {
-				remap[k] = i;
-			}
-			j = target;
-		}
-		
-		for (int i = 0; i < data.length; i++) {
-			data[i] = remap[data[i]];
-		}
-	}
-	
-	private void writeEdges(int pixels[]) {
-		//NOTE: There is currently no mechanism for obtaining the edge data
-		//in any other format other than an INT_ARGB type BufferedImage.
-		//This may be easily remedied by providing alternative accessors.
-		if (edgesImage == null) {
-			edgesImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
-		}
-		edgesImage.getWritableTile(0, 0).setDataElements(0, 0, width, height, pixels);
-	}
- 
+  /** Offset used when sampling the Gaussian on either side of a pixel. */
+  private static final float HALF_PIXEL = 0.5f;
+
+  /** Red weight in the luminance conversion. */
+  private static final float LUMINANCE_RED = 0.299f;
+
+  /** Green weight in the luminance conversion. */
+  private static final float LUMINANCE_GREEN = 0.587f;
+
+  /** Blue weight in the luminance conversion. */
+  private static final float LUMINANCE_BLUE = 0.114f;
+
+  /** Histogram bins, one per byte value. */
+  private static final int HISTOGRAM_SIZE = 256;
+
+  /** Largest byte value. */
+  private static final int BYTE_MAX = 255;
+
+  /** Mask for one byte. */
+  private static final int BYTE_MASK = 0xff;
+
+  /** Mask for one unsigned short. */
+  private static final int SHORT_MASK = 0xffff;
+
+  /** Divisor that maps an unsigned short onto a byte. */
+  private static final int SHORT_TO_BYTE = 256;
+
+  /** Bit shift of the red byte in a packed pixel. */
+  private static final int RED_SHIFT = 16;
+
+  /** Bit shift of the green byte in a packed pixel. */
+  private static final int GREEN_SHIFT = 8;
+
+  /** Mask of the red byte in a packed pixel. */
+  private static final int RED_MASK = 0xff0000;
+
+  /** Mask of the green byte in a packed pixel. */
+  private static final int GREEN_MASK = 0xff00;
+
+  /** Pixel stored when a point is not an edge. */
+  private static final int BACKGROUND = 0xff000000;
+
+  /** Image height in pixels. */
+  private int height;
+
+  /** Image width in pixels. */
+  private int width;
+
+  /** Pixel count. */
+  private int picsize;
+
+  /** Luminance, later reused as edge intensity. */
+  private int[] data;
+
+  /** Gradient magnitude at each pixel. */
+  private int[] magnitude;
+
+  /** Source image. */
+  private BufferedImage sourceImage;
+
+  /** Image of detected edges. */
+  private BufferedImage edgesImage;
+
+  /** Gaussian radius. */
+  private float gaussianKernelRadius;
+
+  /** Low hysteresis threshold. */
+  private float lowThreshold;
+
+  /** High hysteresis threshold. */
+  private float highThreshold;
+
+  /** Gaussian width in pixels. */
+  private int gaussianKernelWidth;
+
+  /** Whether luminance is histogram-equalised first. */
+  private boolean contrastNormalized;
+
+  /** Horizontal convolution. */
+  private float[] xConv;
+
+  /** Vertical convolution. */
+  private float[] yConv;
+
+  /** Horizontal gradient. */
+  private float[] xGradient;
+
+  /** Vertical gradient. */
+  private float[] yGradient;
+
+  /** Constructs a detector with default parameters. */
+  public CannyEdgeDetector() {
+    lowThreshold = DEFAULT_LOW_THRESHOLD;
+    highThreshold = DEFAULT_HIGH_THRESHOLD;
+    gaussianKernelRadius = DEFAULT_KERNEL_RADIUS;
+    gaussianKernelWidth = DEFAULT_KERNEL_WIDTH;
+    contrastNormalized = false;
+  }
+
+  /**
+   * Returns the source image.
+   *
+   * @return the source image, or null
+   */
+  public BufferedImage getSourceImage() {
+    return sourceImage;
+  }
+
+  /**
+   * Sets the image that supplies luminance data.
+   *
+   * <p>A source image must be set before {@link #process()} is called.
+   *
+   * @param image a source of luminance data
+   */
+  public void setSourceImage(final BufferedImage image) {
+    sourceImage = image;
+  }
+
+  /**
+   * Returns the edge image from the last call to {@link #process()}.
+   *
+   * <p>Edge pixels are white and all other pixels are black. The image type is
+   *
+   * <p>TYPE_INT_ARGB.
+   *
+   * @return the edge image, or null if process has not been called
+   */
+  public BufferedImage getEdgesImage() {
+    return edgesImage;
+  }
+
+  /**
+   * Replaces the edge image without changing detection.
+   *
+   * @param image expected, though not required, to be null
+   */
+  public void setEdgesImage(final BufferedImage image) {
+    this.edgesImage = image;
+  }
+
+  /**
+   * Returns the low hysteresis threshold.
+   *
+   * @return the low hysteresis threshold
+   */
+  public float getLowThreshold() {
+    return lowThreshold;
+  }
+
+  /**
+   * Sets the low hysteresis threshold.
+   *
+   * <p>Suitable values must be determined experimentally. It is nonsensical,
+   *
+   * <p>though not prohibited, for this value to exceed the high threshold.
+   *
+   * @param threshold a low hysteresis threshold
+   */
+  public void setLowThreshold(final float threshold) {
+    lowThreshold = requireNonNegative(threshold);
+  }
+
+  /**
+   * Returns the high hysteresis threshold.
+   *
+   * @return the high hysteresis threshold
+   */
+  public float getHighThreshold() {
+    return highThreshold;
+  }
+
+  /**
+   * Sets the high hysteresis threshold.
+   *
+   * <p>Suitable values must be determined experimentally. It is nonsensical,
+   *
+   * <p>though not prohibited, for this value to be less than the low threshold.
+   *
+   * @param threshold a high hysteresis threshold
+   */
+  public void setHighThreshold(final float threshold) {
+    highThreshold = requireNonNegative(threshold);
+  }
+
+  /**
+   * Rejects a negative hysteresis threshold.
+   *
+   * @param threshold candidate threshold
+   * @return the same threshold when it is zero or positive
+   */
+  private static float requireNonNegative(final float threshold) {
+    if (threshold < 0) {
+      throw new IllegalArgumentException();
+    }
+    return threshold;
+  }
+
+  /**
+   * Returns the Gaussian kernel width in pixels.
+   *
+   * @return the radius of the convolution operation in pixels
+   */
+  public int getGaussianKernelWidth() {
+    return gaussianKernelWidth;
+  }
+
+  /**
+   * Sets the Gaussian kernel width in pixels.
+   *
+   * <p>The number of pixels across which the Gaussian kernel is applied. This
+   *
+   * <p>implementation will reduce the radius if the contribution of pixel
+   *
+   * <p>values is deemed negligible,
+   *
+   * <p>so this is actually a maximum radius.
+   *
+   * @param kernelWidth a radius for the convolution, at least 2
+   */
+  public void setGaussianKernelWidth(final int kernelWidth) {
+    if (kernelWidth < MIN_KERNEL_WIDTH) {
+      throw new IllegalArgumentException();
+    }
+    this.gaussianKernelWidth = kernelWidth;
+  }
+
+  /**
+   * Returns the Gaussian kernel radius.
+   *
+   * @return the Gaussian kernel radius in pixels
+   */
+  public float getGaussianKernelRadius() {
+    return gaussianKernelRadius;
+  }
+
+  /**
+   * Sets the Gaussian kernel radius used before the gradient is calculated.
+   *
+   * @param radius a Gaussian kernel radius in pixels, must exceed 0.1
+   */
+  public void setGaussianKernelRadius(final float radius) {
+    if (radius < MIN_KERNEL_RADIUS) {
+      throw new IllegalArgumentException();
+    }
+    this.gaussianKernelRadius = radius;
+  }
+
+  /**
+   * Reports whether contrast is normalised before edge extraction.
+   *
+   * @return whether the contrast is normalised
+   */
+  public boolean isContrastNormalized() {
+    return contrastNormalized;
+  }
+
+  /**
+   * Sets whether the contrast is normalised.
+   *
+   * @param normalized true if the contrast should be normalised
+   */
+  public void setContrastNormalized(final boolean normalized) {
+    this.contrastNormalized = normalized;
+  }
+
+  /** Detects edges in the current source image. */
+  public void process() {
+    width = sourceImage.getWidth();
+    height = sourceImage.getHeight();
+    picsize = width * height;
+    initArrays();
+    readLuminance();
+    if (contrastNormalized) {
+      normalizeContrast();
+    }
+    computeGradients(gaussianKernelRadius, gaussianKernelWidth);
+    final int low = Math.round(lowThreshold * MAGNITUDE_SCALE);
+    final int high = Math.round(highThreshold * MAGNITUDE_SCALE);
+    performHysteresis(low, high);
+    thresholdEdges();
+    writeEdges(data);
+  }
+
+  /** Allocates the working arrays when the image size changes. */
+  private void initArrays() {
+    if (data == null || picsize != data.length) {
+      data = new int[picsize];
+      magnitude = new int[picsize];
+      xConv = new float[picsize];
+      yConv = new float[picsize];
+      xGradient = new float[picsize];
+      yGradient = new float[picsize];
+    }
+  }
+
+  /**
+   * Computes gradients and non-maximal suppression.
+   *
+   * <p>The technique for non-maximal suppression and gradient computation is
+   *
+   * <p>derived from an implementation posted in the following forum, with the
+   *
+   * <p>clear intent of
+   *
+   * <p>others using the code:
+   * http://forum.java.sun.com/thread.jspa?threadID=546211&amp;start=45&amp;
+   *
+   * <p>tstart=0
+   *
+   * <p>My code effectively mimics the algorithm exhibited above. Since I don't
+   *
+   * <p>know the
+   *
+   * <p>providence of the code that was posted it is a possibility (though I
+   *
+   * <p>think a very remote one) that
+   *
+   * <p>this code violates someone's intellectual property rights. If this
+   *
+   * <p>concerns you feel free to
+   *
+   * <p>contact me for an alternative, though less efficient, implementation.
+   *
+   * @param radius Gaussian radius
+   * @param kernelWidth Gaussian width
+   */
+  private void computeGradients(final float radius, final int kernelWidth) {
+    final float[] kernel = new float[kernelWidth];
+    final float[] diffKernel = new float[kernelWidth];
+    final int kwidth = fillKernels(kernel, diffKernel, radius);
+
+    final int initX = kwidth - 1;
+    final int maxX = width - (kwidth - 1);
+    final int initY = width * (kwidth - 1);
+    final int maxY = width * (height - (kwidth - 1));
+
+    convolve(kernel, kwidth, initX, maxX, initY, maxY);
+    horizontalGradient(diffKernel, kwidth, initX, maxX, initY, maxY);
+    verticalGradient(diffKernel, kwidth, initY, maxY);
+    suppressNonMaximum(kwidth);
+  }
+
+  /**
+   * Fills the Gaussian and difference kernels.
+   *
+   * @param g Gaussian weights
+   * @param d difference weights
+   * @param r Gaussian radius
+   * @return the used kernel width
+   */
+  private int fillKernels(final float[] g, final float[] d, final float r) {
+    int kwidth;
+    for (kwidth = 0; kwidth < g.length; kwidth++) {
+      final float center = gaussian(kwidth, r);
+      if (center <= GAUSSIAN_CUT_OFF && kwidth >= MIN_KERNEL_WIDTH) {
+        break;
+      }
+      final float before = gaussian(kwidth - HALF_PIXEL, r);
+      final float after = gaussian(kwidth + HALF_PIXEL, r);
+      final float sum = center + before + after;
+      final float twoPi = KERNEL_TWO * (float) Math.PI;
+      final float area = twoPi * r * r;
+      g[kwidth] = sum / KERNEL_SAMPLE_COUNT / area;
+      d[kwidth] = after - before;
+    }
+    return kwidth;
+  }
+
+  /**
+   * Convolves luminance in x and y.
+   *
+   * @param kernel Gaussian weights
+   * @param kwidth used kernel width
+   * @param initX first x
+   * @param maxX exclusive x limit
+   * @param initY first y offset
+   * @param maxY exclusive y limit
+   */
+  private void convolve(
+      final float[] kernel,
+      final int kwidth,
+      final int initX,
+      final int maxX,
+      final int initY,
+      final int maxY) {
+    for (int x = initX; x < maxX; x++) {
+      for (int y = initY; y < maxY; y += width) {
+        final int index = x + y;
+        float sumX = data[index] * kernel[0];
+        float sumY = sumX;
+        int xOffset = 1;
+        int yOffset = width;
+        while (xOffset < kwidth) {
+          final float weight = kernel[xOffset];
+          sumY += weight * (data[index - yOffset] + data[index + yOffset]);
+          sumX += weight * (data[index - xOffset] + data[index + xOffset]);
+          yOffset += width;
+          xOffset++;
+        }
+        yConv[index] = sumY;
+        xConv[index] = sumX;
+      }
+    }
+  }
+
+  /**
+   * Computes the horizontal gradient from the vertical convolution.
+   *
+   * @param diffKernel difference weights
+   * @param kwidth used kernel width
+   * @param initX first x
+   * @param maxX exclusive x limit
+   * @param initY first y offset
+   * @param maxY exclusive y limit
+   */
+  private void horizontalGradient(
+      final float[] diffKernel,
+      final int kwidth,
+      final int initX,
+      final int maxX,
+      final int initY,
+      final int maxY) {
+    for (int x = initX; x < maxX; x++) {
+      for (int y = initY; y < maxY; y += width) {
+        float sum = 0f;
+        final int index = x + y;
+        for (int i = 1; i < kwidth; i++) {
+          sum += diffKernel[i] * (yConv[index - i] - yConv[index + i]);
+        }
+        xGradient[index] = sum;
+      }
+    }
+  }
+
+  /**
+   * Computes the vertical gradient from the horizontal convolution.
+   *
+   * @param diff difference weights
+   * @param kwidth used kernel width
+   * @param initY first y offset
+   * @param maxY exclusive y limit
+   */
+  private void verticalGradient(
+      final float[] diff, final int kwidth, final int initY, final int maxY) {
+    for (int x = kwidth; x < width - kwidth; x++) {
+      for (int y = initY; y < maxY; y += width) {
+        float sum = 0.0f;
+        final int index = x + y;
+        int yOffset = width;
+        for (int i = 1; i < kwidth; i++) {
+          final float left = xConv[index - yOffset];
+          final float right = xConv[index + yOffset];
+          sum += diff[i] * (left - right);
+          yOffset += width;
+        }
+        yGradient[index] = sum;
+      }
+    }
+  }
+
+  /**
+   * Keeps only local maxima of the gradient magnitude.
+   *
+   * @param kwidth used kernel width
+   */
+  private void suppressNonMaximum(final int kwidth) {
+    final int initX = kwidth;
+    final int maxX = width - kwidth;
+    final int initY = width * kwidth;
+    final int maxY = width * (height - kwidth);
+    for (int x = initX; x < maxX; x++) {
+      for (int y = initY; y < maxY; y += width) {
+        storeMagnitude(x + y);
+      }
+    }
+  }
+
+  /**
+   * Stores the magnitude at one pixel when it is a local maximum.
+   *
+   * <p>This performs the non-maximal suppression phase of Canny edge detection.
+   *
+   * <p>The orientation of the edge is not employed by this implementation. It
+   *
+   * <p>is a simple matter to
+   *
+   * <p>compute it at this point as Math.atan2(yGrad, xGrad).
+   *
+   * @param index pixel index
+   */
+  private void storeMagnitude(final int index) {
+    final float xGrad = xGradient[index];
+    final float yGrad = yGradient[index];
+    final float gradMag = hypot(xGrad, yGrad);
+    final int indexNorth = index - width;
+    final int indexSouth = index + width;
+    final int indexWest = index - 1;
+    final int indexEast = index + 1;
+    final int indexNorthWest = indexNorth - 1;
+    final int indexNorthEast = indexNorth + 1;
+    final int indexSouthWest = indexSouth - 1;
+    final int indexSouthEast = indexSouth + 1;
+
+    final float north = hypot(xGradient[indexNorth], yGradient[indexNorth]);
+    final float south = hypot(xGradient[indexSouth], yGradient[indexSouth]);
+    final float west = hypot(xGradient[indexWest], yGradient[indexWest]);
+    final float east = hypot(xGradient[indexEast], yGradient[indexEast]);
+    final float northEastX = xGradient[indexNorthEast];
+    final float northEastY = yGradient[indexNorthEast];
+    final float northEast = hypot(northEastX, northEastY);
+    final float southEastX = xGradient[indexSouthEast];
+    final float southEastY = yGradient[indexSouthEast];
+    final float southEast = hypot(southEastX, southEastY);
+    final float southWestX = xGradient[indexSouthWest];
+    final float southWestY = yGradient[indexSouthWest];
+    final float southWest = hypot(southWestX, southWestY);
+    final float northWestX = xGradient[indexNorthWest];
+    final float northWestY = yGradient[indexNorthWest];
+    final float northWest = hypot(northWestX, northWestY);
+
+    final boolean sameSign = xGrad * yGrad <= 0f;
+    final boolean xDominates = Math.abs(xGrad) >= Math.abs(yGrad);
+    final float tmp;
+    final boolean maximum;
+    if (sameSign) {
+      if (xDominates) {
+        tmp = Math.abs(xGrad * gradMag);
+        final float sum = xGrad + yGrad;
+        final float forward = Math.abs(yGrad * northEast - sum * east);
+        final float backward = Math.abs(yGrad * southWest - sum * west);
+        maximum = tmp >= forward && tmp > backward;
+      } else {
+        tmp = Math.abs(yGrad * gradMag);
+        final float sum = yGrad + xGrad;
+        final float forward = Math.abs(xGrad * northEast - sum * north);
+        final float backward = Math.abs(xGrad * southWest - sum * south);
+        maximum = tmp >= forward && tmp > backward;
+      }
+    } else if (xDominates) {
+      tmp = Math.abs(xGrad * gradMag);
+      final float delta = xGrad - yGrad;
+      final float forward = Math.abs(yGrad * southEast + delta * east);
+      final float backward = Math.abs(yGrad * northWest + delta * west);
+      maximum = tmp >= forward && tmp > backward;
+    } else {
+      tmp = Math.abs(yGrad * gradMag);
+      final float delta = yGrad - xGrad;
+      final float forward = Math.abs(xGrad * southEast + delta * south);
+      final float backward = Math.abs(xGrad * northWest + delta * north);
+      maximum = tmp >= forward && tmp > backward;
+    }
+    if (maximum) {
+      if (gradMag >= MAGNITUDE_LIMIT) {
+        magnitude[index] = MAGNITUDE_MAX;
+      } else {
+        magnitude[index] = (int) (MAGNITUDE_SCALE * gradMag);
+      }
+    } else {
+      magnitude[index] = 0;
+    }
+  }
+
+  /**
+   * Approximates the hypotenuse.
+   *
+   * <p>It is quite feasible to replace this method with one which only loosely
+   *
+   * <p>approximates the hypot function. Simple approximations such as
+   *
+   * <p>Math.abs(x) + Math.abs(y)
+   *
+   * <p>work fine.
+   *
+   * @param x horizontal component
+   * @param y vertical component
+   * @return the hypotenuse
+   */
+  private float hypot(final float x, final float y) {
+    if (x == 0f) {
+      return y;
+    }
+    if (y == 0f) {
+      return x;
+    }
+    return (float) Math.sqrt(x * x + y * y);
+  }
+
+  /**
+   * Evaluates an unnormalised Gaussian.
+   *
+   * @param x distance
+   * @param sigma standard deviation
+   * @return the Gaussian value
+   */
+  private float gaussian(final float x, final float sigma) {
+    return (float) Math.exp(-(x * x) / (KERNEL_TWO * sigma * sigma));
+  }
+
+  /**
+   * Traces edges from pixels above the high threshold.
+   *
+   * <p>This implementation reuses the data array to store both luminance data
+   *
+   * <p>from the image and edge intensity from the processing. This is done for
+   *
+   * <p>memory efficiency.
+   *
+   * @param low low threshold
+   * @param high high threshold
+   */
+  private void performHysteresis(final int low, final int high) {
+    Arrays.fill(data, 0);
+    int offset = 0;
+    for (int x = 0; x < width; x++) {
+      for (int y = 0; y < height; y++) {
+        if (data[offset] == 0 && magnitude[offset] >= high) {
+          follow(x, y, offset, low);
+        }
+        offset++;
+      }
+    }
+  }
+
+  /**
+   * Follows one edge through neighbouring pixels.
+   *
+   * @param x1 centre x
+   * @param y1 centre y
+   * @param at centre index
+   * @param low low threshold
+   */
+  private void follow(final int x1, final int y1, final int at, final int low) {
+    final int x0 = x1 == 0 ? x1 : x1 - 1;
+    final int x2 = x1 == width - 1 ? x1 : x1 + 1;
+    final int y0 = y1 == 0 ? y1 : y1 - 1;
+    final int y2 = y1 == height - 1 ? y1 : y1 + 1;
+
+    data[at] = magnitude[at];
+    for (int x = x0; x <= x2; x++) {
+      for (int y = y0; y <= y2; y++) {
+        final int i2 = x + y * width;
+        final boolean other = y != y1 || x != x1;
+        if (other && data[i2] == 0 && magnitude[i2] >= low) {
+          follow(x, y, i2, low);
+          return;
+        }
+      }
+    }
+  }
+
+  /** Converts traced edges to black and white pixels. */
+  private void thresholdEdges() {
+    for (int i = 0; i < picsize; i++) {
+      if (data[i] > 0) {
+        data[i] = -1;
+      } else {
+        data[i] = BACKGROUND;
+      }
+    }
+  }
+
+  /**
+   * Converts one colour to luminance.
+   *
+   * @param red red channel
+   * @param green green channel
+   * @param blue blue channel
+   * @return the luminance
+   */
+  private int luminance(final float red, final float green, final float blue) {
+    final float redPart = LUMINANCE_RED * red;
+    final float greenPart = LUMINANCE_GREEN * green;
+    final float bluePart = LUMINANCE_BLUE * blue;
+    return Math.round(redPart + greenPart + bluePart);
+  }
+
+  /**
+   * Returns the source pixels.
+   *
+   * @return the pixel buffer
+   */
+  private Object rawPixels() {
+    final java.awt.image.Raster raster = sourceImage.getData();
+    return raster.getDataElements(0, 0, width, height, null);
+  }
+
+  /** Reads luminance from the source image into {@code data}. */
+  private void readLuminance() {
+    final int type = sourceImage.getType();
+    final int packedRgb = BufferedImage.TYPE_INT_RGB;
+    final int packedArgb = BufferedImage.TYPE_INT_ARGB;
+    if (type == packedRgb || type == packedArgb) {
+      readPacked(type);
+    } else if (type == BufferedImage.TYPE_BYTE_GRAY) {
+      readByteGray();
+    } else if (type == BufferedImage.TYPE_USHORT_GRAY) {
+      readUshortGray();
+    } else if (type == BufferedImage.TYPE_3BYTE_BGR) {
+      readBgr();
+    } else {
+      throw new IllegalArgumentException("Unsupported image type: " + type);
+    }
+  }
+
+  /**
+   * Reads a packed RGB or ARGB image.
+   *
+   * @param type image type, accepted only to keep the call shape
+   */
+  private void readPacked(final int type) {
+    final int packedRgb = BufferedImage.TYPE_INT_RGB;
+    final int packedArgb = BufferedImage.TYPE_INT_ARGB;
+    if (type != packedRgb && type != packedArgb) {
+      throw new IllegalArgumentException("Unsupported image type: " + type);
+    }
+    final Object pixels = rawPixels();
+    final int[] packed = (int[]) pixels;
+    for (int i = 0; i < picsize; i++) {
+      final int pixel = packed[i];
+      final int red = (pixel & RED_MASK) >> RED_SHIFT;
+      final int green = (pixel & GREEN_MASK) >> GREEN_SHIFT;
+      final int blue = pixel & BYTE_MASK;
+      data[i] = luminance(red, green, blue);
+    }
+  }
+
+  /** Reads a byte gray image. */
+  private void readByteGray() {
+    final Object pixels = rawPixels();
+    final byte[] gray = (byte[]) pixels;
+    for (int i = 0; i < picsize; i++) {
+      data[i] = gray[i] & BYTE_MASK;
+    }
+  }
+
+  /** Reads an unsigned short gray image. */
+  private void readUshortGray() {
+    final Object pixels = rawPixels();
+    final short[] gray = (short[]) pixels;
+    for (int i = 0; i < picsize; i++) {
+      data[i] = (gray[i] & SHORT_MASK) / SHORT_TO_BYTE;
+    }
+  }
+
+  /** Reads a 3-byte BGR image. */
+  private void readBgr() {
+    final Object pixels = rawPixels();
+    final byte[] bgr = (byte[]) pixels;
+    int offset = 0;
+    for (int i = 0; i < picsize; i++) {
+      final int blue = bgr[offset] & BYTE_MASK;
+      offset++;
+      final int green = bgr[offset] & BYTE_MASK;
+      offset++;
+      final int red = bgr[offset] & BYTE_MASK;
+      offset++;
+      data[i] = luminance(red, green, blue);
+    }
+  }
+
+  /** Equalises the luminance histogram. */
+  private void normalizeContrast() {
+    final int[] histogram = new int[HISTOGRAM_SIZE];
+    for (int i = 0; i < data.length; i++) {
+      histogram[data[i]]++;
+    }
+    final int[] remap = new int[HISTOGRAM_SIZE];
+    int sum = 0;
+    int j = 0;
+    for (int i = 0; i < histogram.length; i++) {
+      sum += histogram[i];
+      final int target = sum * BYTE_MAX / picsize;
+      for (int k = j + 1; k <= target; k++) {
+        remap[k] = i;
+      }
+      j = target;
+    }
+    for (int i = 0; i < data.length; i++) {
+      data[i] = remap[data[i]];
+    }
+  }
+
+  /**
+   * Writes edge pixels into an ARGB image.
+   *
+   * <p>There is currently no mechanism for obtaining the edge data in any
+   *
+   * <p>format other than an INT_ARGB BufferedImage. This may be remedied by
+   *
+   * <p>providing alternative
+   *
+   * <p>accessors.
+   *
+   * @param pixels edge pixels
+   */
+  private void writeEdges(final int[] pixels) {
+    if (edgesImage == null) {
+      final int argb = BufferedImage.TYPE_INT_ARGB;
+      edgesImage = new BufferedImage(width, height, argb);
+    }
+    final WritableRaster tile = edgesImage.getWritableTile(0, 0);
+    tile.setDataElements(0, 0, width, height, pixels);
+  }
 }
