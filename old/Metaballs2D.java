@@ -1,200 +1,314 @@
 package old;
 
+/** Two-dimensional metaball mesh. */
+public class Metaballs2D {
+  /** Bit for the first square corner. */
+  private static final int CORNER_A = 1;
 
-//==================================================
-//class Metaballs2D
-//==================================================
-public class Metaballs2D
-{
-// Isovalue
-// ------------------
-protected float isovalue;
+  /** Bit for the second square corner. */
+  private static final int CORNER_B = 2;
 
-// Grid
-// ------------------
-protected int  resx,resy;
-protected float stepx,stepy;
-protected float[] gridValue;
-protected int nbGridValue;  
+  /** Bit for the third square corner. */
+  private static final int CORNER_C = 4;
 
-// Voxels      
-// ------------------
-protected int[] voxel;
-protected int nbVoxel;
+  /** Bit for the fourth square corner. */
+  private static final int CORNER_D = 8;
 
-// EdgeVertex
-// ------------------
-protected EdgeVertex[] edgeVrt;
-protected int nbEdgeVrt;  
+  /** Vertices stored for each voxel. */
+  private static final int VERTICES_PER_VOXEL = 2;
 
-// Lines
-// what we pass to the renderer
-// ------------------
-protected int[] lineToDraw;  
-protected int nbLineToDraw;
+  /** Iso value. */
+  private float isoValue;
 
-// Constructor
-// ------------------
-public Metaballs2D(){}
+  /** Horizontal resolution. */
+  private int resolutionX;
 
+  /** Vertical resolution. */
+  private int resolutionY;
 
-// init(int, int)
-// ------------------
-public void init(int resx, int resy)
-{
-	this.resx = resx;
-	this.resy = resy;
+  /** Horizontal step. */
+  private float stepX;
 
-	this.stepx = 1.0f/( (float)(resx-1));
-	this.stepy = 1.0f/( (float)(resy-1));
+  /** Vertical step. */
+  private float stepY;
 
-	// Allocate gridValue
-	nbGridValue	= resx*resy;
-	gridValue	= new float[nbGridValue];
+  /** Scalar field. */
+  private float[] gridValue;
 
-	// Allocate voxels
-	nbVoxel		= nbGridValue;
-	voxel		= new int[nbVoxel];
+  /** Number of grid samples. */
+  private int gridCount;
 
-	// Allocate EdgeVertices
-     edgeVrt 	= new EdgeVertex [2*nbVoxel];
-     nbEdgeVrt 	= 2*nbVoxel;
+  /** Voxel table. */
+  private int[] voxel;
 
-	// Allocate Lines
-	lineToDraw 		= new int[2*nbVoxel];
-     nbLineToDraw 	= 0;
-	
-     // Precompute some values
-	int x,y,n,index;
-	n = 0;
-	for (x=0 ; x<resx ; x++)
-		for (y=0 ; y<resy ; y++)
-		{
-			index = 2*n;
-			// index to edgeVrt
-                     voxel[x+resx*y] = index;
-			// values
-                     edgeVrt[index]   = new EdgeVertex(x*stepx, y*stepy);
-                     edgeVrt[index+1] = new EdgeVertex(x*stepx, y*stepy);
+  /** Number of voxels. */
+  private int voxelCount;
 
-			// Next!
-			n++;
-		}
-	
-}
+  /** Edge vertices. */
+  private EdgeVertex[] edgeVertices;
 
-// computeIsovalue()
-// ------------------
-public void computeIsovalue()
-{
+  /** Number of edge vertices. */
+  private int edgeVertexCount;
 
- // A simple test : put a metaball on center of the screen
-/*
-	float	ballx = 0.5f;
-	float	bally = 0.5f;
-	float	vx,vy;
-	float	dist;
+  /** Lines passed to the renderer. */
+  private int[] lineToDraw;
 
-	int x,y;
-	vx = 0.0f;
-	for (x=0 ; x<resx; x++)
-	{	
-		vy = 0.0f;
-		for (y=0 ; y<resy; y++)
-		{
-			dist = (float)sqrt((vx-ballx)*(vx-ballx) + (vy-bally)*(vy-bally));
-			gridValue[x+resx*y] = 10.0f/(dist*dist+0.001f);
-			vy+=stepy;
-		}
-		vx+=stepx;
-	}
-*/
- 
-         
-}
+  /** Number of line endpoints stored. */
+  private int lineCount;
 
+  /** Creates an uninitialised mesh. */
+  public Metaballs2D() {
+    // fields are filled by init
+  }
 
-// computeMesh()
-// ------------------
-public void computeMesh()
-{
-	// Compute IsoValue
-	computeIsovalue();
-	// Get Lines indices
+  /**
+   * Allocates the grid for a resolution.
+   *
+   * @param width horizontal samples
+   * @param height vertical samples
+   */
+  public void init(final int width, final int height) {
+    this.resolutionX = width;
+    this.resolutionY = height;
+    this.stepX = 1.0f / (float) (width - 1);
+    this.stepY = 1.0f / (float) (height - 1);
 
-	int					x,y,squareIndex,n;
-	int					iEdge;
-	int					offx, offy, offAB;
-	int					toCompute;
-	int					offset;
-	float					t;
-	float					vx,vy;
-	int[]                                   edgeOffsetInfo;
+    gridCount = width * height;
+    gridValue = new float[gridCount];
+    voxelCount = gridCount;
+    voxel = new int[voxelCount];
+    edgeVertices = new EdgeVertex[VERTICES_PER_VOXEL * voxelCount];
+    edgeVertexCount = VERTICES_PER_VOXEL * voxelCount;
+    lineToDraw = new int[VERTICES_PER_VOXEL * voxelCount];
+    lineCount = 0;
 
-	nbLineToDraw = 0;
-	vx	     = 0.0f;
-	for (x=0 ; x<resx-1 ; x++)
-	{
-		vy = 0.0f;
-		for (y=0 ; y<resy-1 ; y++)
-		{
-			offset		= x + resx*y;
-			squareIndex = getSquareIndex(x,y);
+    int index = 0;
+    for (int x = 0; x < width; x++) {
+      for (int y = 0; y < height; y++) {
+        final int vertex = VERTICES_PER_VOXEL * index;
+        voxel[x + width * y] = vertex;
+        edgeVertices[vertex] = new EdgeVertex(x * stepX, y * stepY);
+        edgeVertices[vertex + 1] = new EdgeVertex(x * stepX, y * stepY);
+        index++;
+      }
+    }
+  }
 
-			n	        = 0;
-			while ( (iEdge = MetaballsTable.edgeCut[squareIndex][n++]) != -1)
-			{
-				edgeOffsetInfo          = MetaballsTable.edgeOffsetInfo[iEdge];
-				offx			= edgeOffsetInfo[0];
-				offy			= edgeOffsetInfo[1];
-				offAB			= edgeOffsetInfo[2];
+  /**
+   * Fills the scalar field.
+   *
+   * <p>The original sample placed one metaball at the centre of the screen.
+   *
+   * <p>That body is intentionally empty so subclasses can supply the field.
+   */
+  public void computeIsovalue() {
+    // subclasses supply the scalar field
+  }
 
-                            lineToDraw[nbLineToDraw++] = voxel[(x+offx) + resx*(y+offy)] + offAB;
-			}
+  /** Builds the line mesh from the current scalar field. */
+  public void computeMesh() {
+    computeIsovalue();
+    lineCount = 0;
+    float vx = 0.0f;
+    for (int x = 0; x < resolutionX - 1; x++) {
+      float vy = 0.0f;
+      for (int y = 0; y < resolutionY - 1; y++) {
+        final int offset = x + resolutionX * y;
+        final int squareIndex = getSquareIndex(x, y);
+        appendEdges(squareIndex, x, y);
+        final int toCompute = MetaballsTable.edgeToComputeAt(squareIndex);
+        if (toCompute > 0) {
+          mix(toCompute, offset, vx, vy);
+        }
+        vy += stepY;
+      }
+      vx += stepX;
+    }
+    lineCount /= VERTICES_PER_VOXEL;
+  }
 
-            toCompute = MetaballsTable.edgeToCompute[squareIndex];
-			if (toCompute>0)
-			{
-                if ( (toCompute & 1) > 0) // Edge 0
-				{
-					t	= (isovalue - gridValue[offset]) / (gridValue[offset+1] - gridValue[offset]); 
-					edgeVrt[voxel[offset]].x = vx*(1.0f-t) + t*(vx+stepx);
-                             }
-				if ( (toCompute & 2) > 0) // Edge 3
-				{
-					t	= (isovalue - gridValue[offset]) / (gridValue[offset+resx] - gridValue[offset]); 
-					edgeVrt[voxel[offset]+1].y = vy*(1.0f-t) + t*(vy+stepy);
-				}
-			
-			} // toCompute
-			vy += stepy;
-		}	// for y
+  /**
+   * Appends the cut edges of one square.
+   *
+   * @param squareIndex square configuration
+   * @param x square x
+   * @param y square y
+   */
+  private void appendEdges(final int squareIndex, final int x, final int y) {
+    int slot = 0;
+    int edge = MetaballsTable.edgeCutAt(squareIndex, slot);
+    while (edge != -1) {
+      final int[] table = voxel;
+      final int vertex;
+      vertex = MetaballsTable.voxelIndexForEdge(table, resolutionX, x, y, edge);
+      lineToDraw[lineCount] = vertex;
+      lineCount++;
+      slot++;
+      edge = MetaballsTable.edgeCutAt(squareIndex, slot);
+    }
+  }
 
-		vx += stepx;
-	}	// for x
+  /**
+   * Interpolates the edges that this square cuts.
+   *
+   * @param m edge mask
+   * @param at grid offset
+   * @param vx horizontal position
+   * @param vy vertical position
+   */
+  private void mix(final int m, final int at, final float vx, final float vy) {
+    if ((m & CORNER_A) > 0) {
+      final float span = gridValue[at + 1] - gridValue[at];
+      final float t = (isoValue - gridValue[at]) / span;
+      edgeVertices[voxel[at]].x = vx * (1.0f - t) + t * (vx + stepX);
+    }
+    if ((m & CORNER_B) > 0) {
+      final float span = gridValue[at + resolutionX] - gridValue[at];
+      final float t = (isoValue - gridValue[at]) / span;
+      edgeVertices[voxel[at] + 1].y = vy * (1.0f - t) + t * (vy + stepY);
+    }
+  }
 
-	nbLineToDraw /= 2;
- 
-}
+  /**
+   * Classifies one square against the iso value.
+   *
+   * @param x square x
+   * @param y square y
+   * @return the square index
+   */
+  protected int getSquareIndex(final int x, final int y) {
+    int squareIndex = 0;
+    final int offy = resolutionX * y;
+    final int offy1 = resolutionX * (y + 1);
+    if (gridValue[x + offy] < isoValue) {
+      squareIndex |= CORNER_A;
+    }
+    if (gridValue[x + 1 + offy] < isoValue) {
+      squareIndex |= CORNER_B;
+    }
+    if (gridValue[x + 1 + offy1] < isoValue) {
+      squareIndex |= CORNER_C;
+    }
+    if (gridValue[x + offy1] < isoValue) {
+      squareIndex |= CORNER_D;
+    }
+    return squareIndex;
+  }
 
-// getSquareIndex(int,int)
-// ------------------
-protected int getSquareIndex(int x, int y)
-{
-	int squareIndex = 0;
-    int offy  = resx*y;
-    int offy1 = resx*(y+1);
-	if (gridValue[x+offy]		< isovalue) squareIndex |= 1;
-	if (gridValue[x+1+offy]		< isovalue) squareIndex |= 2;
-	if (gridValue[x+1+offy1]	< isovalue) squareIndex |= 4;
-	if (gridValue[x+offy1]		< isovalue) squareIndex |= 8;
-	return squareIndex;
-}
+  /**
+   * Sets the iso value.
+   *
+   * @param iso iso value
+   */
+  public void setIsovalue(final float iso) {
+    this.isoValue = iso;
+  }
 
-// setIsoValue(float)
-// ------------------
-public void setIsovalue(float iso){this.isovalue = iso;}
+  /**
+   * Returns the horizontal resolution.
+   *
+   * @return the horizontal resolution
+   */
+  protected final int resolutionX() {
+    return resolutionX;
+  }
 
+  /**
+   * Returns the vertical resolution.
+   *
+   * @return the vertical resolution
+   */
+  protected final int resolutionY() {
+    return resolutionY;
+  }
 
+  /**
+   * Returns the horizontal step.
+   *
+   * @return the horizontal step
+   */
+  protected final float stepX() {
+    return stepX;
+  }
 
+  /**
+   * Returns the vertical step.
+   *
+   * @return the vertical step
+   */
+  protected final float stepY() {
+    return stepY;
+  }
+
+  /**
+   * Returns the scalar field.
+   *
+   * @return the scalar field
+   */
+  protected final float[] gridValues() {
+    return gridValue;
+  }
+
+  /**
+   * Returns the number of grid samples.
+   *
+   * @return the sample count
+   */
+  protected final int gridCount() {
+    return gridCount;
+  }
+
+  /**
+   * Returns the voxel table.
+   *
+   * @return the voxel table
+   */
+  protected final int[] voxels() {
+    return voxel;
+  }
+
+  /**
+   * Returns the edge vertices.
+   *
+   * @return the edge vertices
+   */
+  protected final EdgeVertex[] edgeVertices() {
+    return edgeVertices;
+  }
+
+  /**
+   * Returns the iso value.
+   *
+   * @return the iso value
+   */
+  protected final float isoValue() {
+    return isoValue;
+  }
+
+  /**
+   * Returns the line table.
+   *
+   * @return the line endpoints
+   */
+  protected final int[] linesToDraw() {
+    return lineToDraw;
+  }
+
+  /**
+   * Returns how many line endpoints are stored.
+   *
+   * @return the endpoint count
+   */
+  protected final int lineCount() {
+    return lineCount;
+  }
+
+  /**
+   * Replaces the line endpoint count.
+   *
+   * @param count new count
+   */
+  protected final void setLineCount(final int count) {
+    lineCount = count;
+  }
 }
