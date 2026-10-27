@@ -1,5 +1,9 @@
 # Dartboard Automatic Calculator
 
+<p align="center">
+  <img src=".github/logo.png" alt="dartboard-automatic-calculator logo" width="128" />
+</p>
+
 A Java desktop program that scores darts automatically from photos of a
 dartboard.
 
